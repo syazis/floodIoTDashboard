@@ -32,20 +32,91 @@ import { Line } from 'react-chartjs-2';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 export default function ProfessionalDashboard() {
+  // 1. STATE UNTUK DATA SEBENAR ESP32
   const [currentData, setCurrentData] = useState({
-    water_level: 4.15,
-    battery: 88,
-    solar_v: 19.5,
-    max_24h: 4.30,
-    current_depth: 3.92
+    water_level: 0.0,
+    battery: 0,
+    solar_v: 0.0,
+    max_24h: 0.0,
+    current_depth: 0.0
   });
 
-  // Data untuk graf utama
+  // 2. STATE UNTUK REKOD GRAF (Maksimum 10 data points ke belakang)
+  const [chartHistory, setChartHistory] = useState<{ labels: string[]; values: number[] }>({
+    labels: ['Waiting...'],
+    values: [0]
+  });
+
+  // 3. LOGIK INTEGRASI REAL-TIME SUPABASE
+  useEffect(() => {
+    // Ambil data terakhir dahulu semasa page pertama kali dimuatkan (Initial Load)
+    const fetchLatestData = async () => {
+      const { data, error } = await supabase
+        .from('flood_data')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (data && data.length > 0) {
+        const latest = data[0];
+        setCurrentData({
+          water_level: latest.water_level || 0,
+          battery: latest.battery_level || 0,
+          solar_v: latest.solar_voltage || 0,
+          max_24h: latest.water_level || 0, // Anda boleh optimumkan dengan query MAX() nanti
+          current_depth: latest.water_level || 0
+        });
+      }
+    };
+
+    fetchLatestData();
+
+    // Langgan (Subscribe) terus ke saluran perubahan PostgreSQL Supabase
+    const channel = supabase
+      .channel('esp32-flood-stream')
+      .on('postgres_changes', 
+        { event: 'INSERT', schema: 'public', table: 'flood_data' }, 
+        (payload) => {
+          const incoming = payload.new;
+          const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+          // Kemaskini kad statistik utama
+          setCurrentData(prev => ({
+            water_level: incoming.water_level,
+            battery: incoming.battery_level || prev.battery,
+            solar_v: incoming.solar_voltage || prev.solar_v,
+            max_24h: incoming.water_level > prev.max_24h ? incoming.water_level : prev.max_24h,
+            current_depth: incoming.water_level
+          }));
+
+          // Kemaskini sejarah graf secara dinamik
+          setChartHistory(prev => {
+            const newLabels = [...prev.labels, timestamp];
+            const newValues = [...prev.values, incoming.water_level];
+
+            // Hadkan hanya 10 data terakhir pada skrin untuk elakkan graf terlalu padat
+            if (newLabels.length > 10) {
+              newLabels.shift();
+              newValues.shift();
+            }
+
+            return { labels: newLabels, values: newValues };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // 4. STRUKTUR DATA DARI STATE UNTUK CHART.JS
   const mainChartData = {
-    labels: ['12 AM', '4 AM', '8 AM', '12 PM', '4 PM', '8 PM', '12 AM'],
+    labels: chartHistory.labels,
     datasets: [{
       label: 'Water Depth (m)',
-      data: [0.8, 1.2, 2.5, 3.1, 2.8, 3.9, 4.15],
+      data: chartHistory.values,
       borderColor: '#38bdf8',
       backgroundColor: (context: any) => {
         const ctx = context.chart.ctx;
@@ -56,7 +127,8 @@ export default function ProfessionalDashboard() {
       },
       fill: true,
       tension: 0.4,
-      pointRadius: 0,
+      pointRadius: 4,
+      pointBackgroundColor: '#38bdf8'
     }]
   };
 
@@ -128,7 +200,7 @@ export default function ProfessionalDashboard() {
                   <div className="flex items-baseline gap-4 mt-2">
                     <span className="text-5xl font-bold text-white tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
                     <div className="flex items-center text-sky-400 text-sm font-bold uppercase gap-1">
-                      <TrendingUp size={16} /> Trending Up
+                      <TrendingUp size={16} /> Live Streaming
                     </div>
                   </div>
                 </div>
@@ -141,8 +213,8 @@ export default function ProfessionalDashboard() {
             {/* Gauges Column */}
             <div className="col-span-4 space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <GaugeCard label="Current Depth" value="3.92m" subLabel="Warning" color="text-orange-400" />
-                <GaugeCard label="Max 24h Depth" value="4.30m" subLabel="Stable" color="text-sky-400" />
+                <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-500" : "text-emerald-400"} />
+                <GaugeCard label="Max 24h Depth" value={`${currentData.max_24h.toFixed(2)}m`} subLabel="Tracked" color="text-sky-400" />
               </div>
               
               {/* Solar & Battery Health */}
@@ -152,11 +224,10 @@ export default function ProfessionalDashboard() {
                     <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
                       <Sun size={14} /> Solar Panel Health
                     </div>
-                    <p className="text-sm font-medium text-white">Solar Voltage: <span className="text-sky-400">19.5V</span></p>
-                    <p className="text-[10px] text-green-400 mt-1 uppercase font-bold">Status: Charging (Normal)</p>
-                  </div>
-                  <div className="h-10 w-24 bg-sky-400/5 rounded p-1">
-                     {/* Mini sparkline logic here */}
+                    <p className="text-sm font-medium text-white">Solar Voltage: <span className="text-sky-400">{currentData.solar_v.toFixed(1)}V</span></p>
+                    <p className="text-[10px] text-green-400 mt-1 uppercase font-bold">
+                      Status: {currentData.solar_v > 12.0 ? "Charging (Normal)" : "No Input / Night"}
+                    </p>
                   </div>
                 </div>
                 <div className="pt-4 border-t border-slate-800">
@@ -164,14 +235,14 @@ export default function ProfessionalDashboard() {
                     <Battery size={14} /> Battery Health
                   </div>
                   <div className="flex justify-between text-sm mb-2">
-                    <span className="text-white">Battery: <span className="text-orange-400">88%</span></span>
+                    <span className="text-white">Battery: <span className="text-orange-400">{currentData.battery}%</span></span>
                   </div>
                   <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div className="bg-orange-400 h-full w-[88%]" style={{boxShadow: '0 0 10px rgba(251, 146, 60, 0.4)'}}></div>
+                    <div className="bg-orange-400 h-full transition-all duration-500" style={{ width: `${currentData.battery}%`, boxShadow: '0 0 10px rgba(251, 146, 60, 0.4)' }}></div>
                   </div>
                   <div className="flex justify-between mt-3 text-[10px]">
-                    <span className="text-slate-500 uppercase font-bold">Voltage: 13.1V</span>
-                    <span className="text-green-400 uppercase font-bold italic">Status: Good</span>
+                    <span className="text-slate-500 uppercase font-bold">Hardware Connection</span>
+                    <span className="text-green-400 uppercase font-bold italic">Online</span>
                   </div>
                 </div>
               </div>
@@ -182,7 +253,6 @@ export default function ProfessionalDashboard() {
                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Sensor Locations</h3>
                <div className="h-[200px] bg-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center">
                   <p className="text-slate-600 text-sm">Industrial Map Integration (Google Maps/Leaflet)</p>
-                  {/* Mock Map Markers */}
                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-sky-400 rounded-full animate-ping"></div>
                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-sky-400 rounded-full border-2 border-white"></div>
                </div>
@@ -195,7 +265,9 @@ export default function ProfessionalDashboard() {
                  <Settings size={14} className="text-slate-600" />
                </div>
                <div className="space-y-4">
-                 <AlertItem time="15:42" type="CRITICAL" text="Station FL01 - Exceeded 4.0m threshold" color="text-red-500" />
+                 {currentData.water_level > 4.0 && (
+                   <AlertItem time="NOW" type="CRITICAL" text="Station FL01 - Exceeded 4.0m threshold!" color="text-red-500" />
+                 )}
                  <AlertItem time="14:15" type="WARNING" text="Station FL03 - Rapid rise detected" color="text-orange-500" />
                  <AlertItem time="11:30" type="INFO" text="Solar Voltage Low: Station FL04" color="text-yellow-500" />
                </div>
@@ -208,7 +280,6 @@ export default function ProfessionalDashboard() {
   );
 }
 
-// Sub-components untuk kekemasan kod
 function NavItem({ icon, label, active = false }: any) {
   return (
     <div className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition ${active ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-lg shadow-sky-500/5' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
