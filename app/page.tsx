@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabaseClient';
+import Image from 'next/image';
 import { 
   LayoutDashboard, 
   Radio, 
@@ -136,15 +137,20 @@ export default function ProfessionalDashboard() {
     <div className="flex h-screen bg-[#0b1120] text-slate-300 font-sans overflow-hidden">
       {/* 1. SIDEBAR */}
       <aside className="w-64 bg-[#111827] border-r border-slate-800 flex flex-col">
-        <div className="p-6 mb-4">
-          <h1 className="text-sky-400 font-bold text-xl flex items-center gap-2">
-            <div className="w-6 h-6 bg-sky-500 rounded-md rotate-45 flex items-center justify-center">
-              <div className="w-3 h-3 bg-white rounded-sm -rotate-45"></div>
-            </div>
-            FLOODWATCH <span className="text-white font-light text-sm">IoT</span>
-          </h1>
+        {/* BAHAGIAN LOGO THB DIKEMASKINI */}
+        <div className="p-4 flex items-center justify-center border-b border-slate-800/50 bg-black/20">
+          <div className="relative w-44 h-20">
+            <Image 
+              src="/thb-logo.jpeg" // Path terus merujuk kepada folder public/
+              alt="THB Logo"
+              fill
+              priority // Memastikan logo dimuatkan serta-merta tanpa delay
+              className="object-contain" // Mengekalkan nisbah aspek logo tanpa penyek
+            />
+          </div>
         </div>
         
+        {/* Menu Navigasi */}
         <nav className="flex-grow px-4 space-y-1">
           <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active />
           <NavItem icon={<Radio size={20}/>} label="Sensors" />
