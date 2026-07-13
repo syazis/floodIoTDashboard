@@ -54,7 +54,9 @@ export default function ProfessionalDashboard() {
     battery: 0,
     solar_v: 0.0,
     max_24h: 0.0,
-    current_depth: 0.0
+    current_depth: 0.0,
+    latitude: 3.1604,
+    longitude: 101.6963
   });
 
   const [chartHistory, setChartHistory] = useState<{ labels: string[]; values: number[] }>({
@@ -63,7 +65,7 @@ export default function ProfessionalDashboard() {
   });
 
   useEffect(() => {
-    setCurrentData({ water_level: 0, battery: 0, solar_v: 0, max_24h: 0, current_depth: 0 });
+    setCurrentData({ water_level: 0, battery: 0, solar_v: 0, max_24h: 0, current_depth: 0, latitude: 3.1604, longitude: 101.6963 });
     setChartHistory({ labels: ['Loading...'], values: [0] });
     setIsLiveVideo(false); 
 
@@ -82,7 +84,9 @@ export default function ProfessionalDashboard() {
           battery: latest.battery_level || 0,
           solar_v: latest.solar_voltage || 0,
           max_24h: latest.water_level || 0, 
-          current_depth: latest.water_level || 0
+          current_depth: latest.water_level || 0,
+          latitude: latest.latitude || 3.1604,
+          longitude: latest.longitude || 101.6963
         });
         
         const timestamp = new Date(latest.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -115,7 +119,9 @@ export default function ProfessionalDashboard() {
             battery: incoming.battery_level || prev.battery,
             solar_v: incoming.solar_voltage || prev.solar_v,
             max_24h: incoming.water_level > prev.max_24h ? incoming.water_level : prev.max_24h,
-            current_depth: incoming.water_level
+            current_depth: incoming.water_level,
+            latitude: incoming.latitude || prev.latitude,
+            longitude: incoming.longitude || prev.longitude
           }));
 
           setChartHistory(prev => {
@@ -174,7 +180,9 @@ export default function ProfessionalDashboard() {
           station_id: selectedStation, 
           water_level: 4.55, 
           battery_level: 95, 
-          solar_voltage: 12.8 
+          solar_voltage: 12.8,
+          latitude: 3.1604,
+          longitude: 101.6963
         }
       ]);
 
@@ -191,11 +199,11 @@ export default function ProfessionalDashboard() {
     datasets: [{
       label: 'Water Depth (m)',
       data: chartHistory.values,
-      borderColor: '#0ea5e9', // DIUBAH: Garisan graf menggunakan Cyber Blue untuk contrast tinggi
+      borderColor: '#0ea5e9', 
       backgroundColor: (context: any) => {
         const ctx = context.chart.ctx;
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(14, 165, 233, 0.25)'); // Glow kesan biru cair
+        gradient.addColorStop(0, 'rgba(14, 165, 233, 0.25)'); 
         gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
         return gradient;
       },
@@ -207,10 +215,9 @@ export default function ProfessionalDashboard() {
   };
 
   return (
-    // DIUBAH: Latar belakang asas ditukar kepada warna Hitam Pekat (#050505) sepadan logo THB
     <div className="flex h-screen bg-[#050505] text-slate-300 font-sans overflow-hidden">
       
-      {/* 1. SIDEBAR - DIUBAH KEPADA HITAM PANEL (#0f0f0f) */}
+      {/* 1. SIDEBAR */}
       <aside className="w-64 bg-[#0f0f0f] border-r border-slate-800 flex flex-col shadow-lg">
         <div className="p-4 flex items-center justify-center border-b border-slate-800 bg-black">
           <div className="relative w-44 h-20">
@@ -232,9 +239,9 @@ export default function ProfessionalDashboard() {
         </div>
       </aside>
 
-      {/* 2. MAIN CONTENT AREA */}
+      {/* 2. MAIN WORKSPACE */}
       <main className="flex-grow flex flex-col overflow-hidden">
-        {/* Top Header Bar - DIUBAH KEPADA HITAM PANEL */}
+        {/* Top Header Bar */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-[#0f0f0f] z-10">
           <div className="relative w-96">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
@@ -249,7 +256,7 @@ export default function ProfessionalDashboard() {
               <Bell size={20} className="text-slate-400 cursor-pointer hover:text-white" />
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#cc0000] rounded-full text-[10px] flex items-center justify-center text-white font-bold">3</span>
             </div>
-            <div className="flex items-center gap-3 border-l border-slate-800 prefix pl-6">
+            <div className="flex items-center gap-3 border-l border-slate-800 pl-6">
               <div className="text-right">
                 <p className="text-sm font-semibold text-white">Iskandar Z.</p>
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Project Manager</p>
@@ -261,104 +268,105 @@ export default function ProfessionalDashboard() {
           </div>
         </header>
 
-        {/* Dashboard Grid - KAD DITUKAR KEPADA HITAM GELAP (#0f0f0f) */}
+        {/* Kontainer Utama Scrollable */}
         <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-[#050505]">
-          <div className="grid grid-cols-12 gap-6">
-            
-            {/* Real-time Water Level Card (Wide) */}
-            <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
-              
-              {/* PANEL ATAS: STRIM & TELEGRAM KAWALAN */}
-              <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-800 pb-4 mb-6">
-                <div className="flex items-center gap-3">
-                  <div className="relative inline-block">
-                    <select 
-                      value={selectedStation} 
-                      onChange={(e) => setSelectedStation(e.target.value)}
-                      className="appearance-none bg-[#161616] text-white text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
-                    >
-                      {STATIONS.map((station) => (
-                        <option key={station.id} value={station.id}>
-                          {station.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                  </div>
+          
+          {/* PANEL UTAMA ATAS: PEMILIHAN STESEN DAN BUTANG PERINTAH */}
+          <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
+            <div className="relative inline-block">
+              <select 
+                value={selectedStation} 
+                onChange={(e) => setSelectedStation(e.target.value)}
+                className="appearance-none bg-[#161616] text-white text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
+              >
+                {STATIONS.map((station) => (
+                  <option key={station.id} value={station.id}>
+                    {station.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Butang Buka Live Stream */}
+              <button
+                onClick={handleToggleVideo}
+                disabled={videoLoading}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
+                  isLiveVideo 
+                    ? 'bg-[#cc0000] border-red-700 text-white animate-pulse' 
+                    : 'bg-[#161616] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
+                {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
+              </button>
+
+              {/* Butang Ujian Telegram */}
+              <button
+                onClick={handleTriggerTestAlert}
+                disabled={testAlertLoading}
+                className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
+              >
+                <Send size={14} />
+                {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
+              </button>
+            </div>
+          </div>
+
+          {/* RUANG VIDEO STRIM (COL-SPAN-12) - DINAMIK MEMBUKA RUANG KAWASAN CCTV ATAS */}
+          {isLiveVideo && (
+            <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
+              <div className="w-full h-[400px] relative bg-slate-950">
+                <video 
+                  src="/dummy-flood-stream.mp4" 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute top-4 left-4 bg-[#cc0000] text-[10px] font-black uppercase text-white px-3 py-1 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
+                  LIVE VIDEO STREAMING FEED ({selectedStation})
                 </div>
-
-                <div className="flex items-center gap-3">
-                  {/* BUTANG BUKA LIVE STREAM */}
-                  <button
-                    onClick={handleToggleVideo}
-                    disabled={videoLoading}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
-                      isLiveVideo 
-                        ? 'bg-[#cc0000] border-red-700 text-white animate-pulse' 
-                        : 'bg-[#161616] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
-                    {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
-                  </button>
-
-                  {/* BUTANG UJIAN TELEGRAM */}
-                  <button
-                    onClick={handleTriggerTestAlert}
-                    disabled={testAlertLoading}
-                    className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
-                  >
-                    <Send size={14} />
-                    {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
-                  </button>
+                <div className="absolute bottom-4 right-4 bg-black/80 text-[10px] text-slate-400 px-3 py-1.5 rounded-xl backdrop-blur-sm font-mono border border-slate-800 shadow-md">
+                  AUTO-TIMEOUT KESELAMATAN BATERI: 2 MINIT
                 </div>
               </div>
+            </div>
+          )}
 
+          {/* GRID UTAMA BAWAH (GRAF & METRIK INFORMASI) */}
+          <div className="grid grid-cols-12 gap-6">
+            
+            {/* Kad Graf Aras Air (Col-span-8) */}
+            <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Real-time Water Level</h3>
                   <div className="flex items-baseline gap-4 mt-2">
                     <span className="text-5xl font-extrabold text-white tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
-                    <div className="flex items-center text-[#cc0000] text-xs font-bold uppercase gap-1 bg-red-950/40 px-2 py-0.5 rounded border border-red-900/50">
-                      <TrendingUp size={14} /> Live Streaming Active
+                    <div className="flex items-center text-[#0ea5e9] text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2 py-0.5 rounded border border-sky-900/50">
+                      <TrendingUp size={14} /> Telemetry Link Online
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* DYNAMIC DISPLAY VIDEO DUMMY VS GRAPH */}
-              {isLiveVideo ? (
-                <div className="w-full h-[250px] bg-black rounded-xl border border-slate-800 mb-2 overflow-hidden relative shadow-inner">
-                  <video 
-                    src="/dummy-flood-stream.mp4" 
-                    autoPlay 
-                    loop 
-                    muted 
-                    playsInline
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-3 left-3 bg-[#cc0000] text-[9px] font-black uppercase text-white px-2 py-0.5 rounded animate-pulse tracking-widest">
-                    LIVE STREAM FEED ({selectedStation})
-                  </div>
-                  <div className="absolute bottom-3 right-3 bg-black/70 text-[9px] text-slate-400 px-2 py-0.5 rounded backdrop-blur-sm font-mono border border-slate-800">
-                    2 MIN AUTO-TIMEOUT KESELAMATAN BATERI
-                  </div>
-                </div>
-              ) : (
-                <div className="h-[250px] w-full">
-                  <Line data={mainChartData} options={chartOptions} />
-                </div>
-              )}
+              <div className="h-[280px] w-full">
+                <Line data={mainChartData} options={chartOptions} />
+              </div>
             </div>
 
-            {/* Gauges Column */}
+            {/* Kad Lajur Informasi Sebelah Kanan (Col-span-4) */}
             <div className="col-span-4 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-500" : "text-emerald-400"} />
                 <GaugeCard label="Max 24h Depth" value={`${currentData.max_24h.toFixed(2)}m`} subLabel="Tracked" color="text-[#cc0000]" />
               </div>
               
-              {/* Solar & Battery Health - DIUBAH AKSEN KE BIRU CYBER (#0ea5e9) */}
+              {/* Kad Status Kuasa Solar & Bateri */}
               <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-5 space-y-6 shadow-sm">
                 <div>
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
@@ -378,7 +386,7 @@ export default function ProfessionalDashboard() {
                     <span className="text-slate-300">Battery: <span className="text-white font-bold">{currentData.battery}%</span></span>
                   </div>
                   <div className="w-full bg-[#161616] h-2 rounded-full overflow-hidden border border-slate-800">
-                    <div className="bg-[#0ea5e9] h-full transition-all duration-500 shadow-[0_0_10px_rgba(14,165,233,0.5)]" style={{ width: `${currentData.battery}%` }}></div>
+                    <div className="bg-[#0ea5e9] h-full transition-all duration-500" style={{ width: `${currentData.battery}%` }}></div>
                   </div>
                   <div className="flex justify-between mt-3 text-[10px] font-bold">
                     <span className="text-slate-500 uppercase">Node ID: {selectedStation}</span>
@@ -388,7 +396,7 @@ export default function ProfessionalDashboard() {
               </div>
             </div>
 
-            {/* Map Section */}
+            {/* Kad Kedudukan GIS Peta */}
             <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
                 <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Sensor Locations</h3>
                 <div className="h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center">
@@ -396,12 +404,12 @@ export default function ProfessionalDashboard() {
                    <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full animate-ping"></div>
                    <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-slate-900"></div>
                    <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-400 bg-[#161616] px-3 py-1.5 rounded-xl border border-slate-800 shadow-sm">
-                     Active Node: {selectedStation}
+                     Lat: {currentData.latitude.toFixed(4)} | Lng: {currentData.longitude.toFixed(4)}
                    </div>
                 </div>
             </div>
 
-            {/* Alert Feed */}
+            {/* Kad Log Amaran Bahaya Telegram */}
             <div className="col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
                <div className="flex justify-between items-center mb-6">
                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
