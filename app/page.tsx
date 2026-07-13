@@ -44,7 +44,7 @@ const STATIONS = [
 ];
 
 export default function ProfessionalDashboard() {
-  const [selectedStation, setSelectedStation] = useState('FL02'); 
+  const [selectedStation, setSelectedStation] = useState('FL01'); 
   const [isLiveVideo, setIsLiveVideo] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
