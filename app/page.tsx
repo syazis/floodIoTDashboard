@@ -16,7 +16,10 @@ import {
   Battery,
   TrendingUp,
   AlertTriangle,
-  ChevronDown
+  ChevronDown,
+  Video,
+  VideoOff,
+  Send
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -33,7 +36,6 @@ import { Line } from 'react-chartjs-2';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
-// Senarai stesen sedia ada (Boleh diletakkan dalam DB kemudian)
 const STATIONS = [
   { id: 'FL01', name: 'Station FL01 (Sg. Bunus)' },
   { id: 'FL02', name: 'Station FL02 (Sg. Gombak)' },
@@ -42,10 +44,11 @@ const STATIONS = [
 ];
 
 export default function ProfessionalDashboard() {
-  // State untuk stesen yang dipilih
-  const [selectedStation, setSelectedStation] = useState('FL01');
+  const [selectedStation, setSelectedStation] = useState('FL02'); 
+  const [isLiveVideo, setIsLiveVideo] = useState(false);
+  const [videoLoading, setVideoLoading] = useState(false);
+  const [testAlertLoading, setTestAlertLoading] = useState(false);
 
-  // 1. STATE UNTUK DATA SEBENAR ESP32
   const [currentData, setCurrentData] = useState({
     water_level: 0.0,
     battery: 0,
@@ -54,24 +57,21 @@ export default function ProfessionalDashboard() {
     current_depth: 0.0
   });
 
-  // 2. STATE UNTUK REKOD GRAF (Maksimum 10 data points ke belakang)
   const [chartHistory, setChartHistory] = useState<{ labels: string[]; values: number[] }>({
     labels: ['Waiting...'],
     values: [0]
   });
 
-  // 3. LOGIK INTEGRASI REAL-TIME SUPABASE (Berubah mengikut selectedStation)
   useEffect(() => {
-    // Reset graf & data kad ke state asal bila tukar stesen untuk elak data stesen lama tersekat
     setCurrentData({ water_level: 0, battery: 0, solar_v: 0, max_24h: 0, current_depth: 0 });
     setChartHistory({ labels: ['Loading...'], values: [0] });
+    setIsLiveVideo(false); 
 
-    // Ambil data terakhir untuk stesen yang dipilih (Initial Load)
     const fetchLatestData = async () => {
       const { data, error } = await supabase
         .from('flood_data')
         .select('*')
-        .eq('station_id', selectedStation) // Tapis mengikut stesen
+        .eq('station_id', selectedStation)
         .order('created_at', { ascending: false })
         .limit(1);
 
@@ -97,7 +97,6 @@ export default function ProfessionalDashboard() {
 
     fetchLatestData();
 
-    // Langgan (Subscribe) perubahan PostgreSQL Supabase dengan filter stesen tertentu
     const channel = supabase
       .channel(`esp32-flood-stream-${selectedStation}`)
       .on('postgres_changes', 
@@ -105,13 +104,12 @@ export default function ProfessionalDashboard() {
           event: 'INSERT', 
           schema: 'public', 
           table: 'flood_data',
-          filter: `station_id=eq.${selectedStation}` // Realtime filter mengikut stesen
+          filter: `station_id=eq.${selectedStation}`
         }, 
         (payload) => {
           const incoming = payload.new;
           const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-          // Kemaskini kad statistik utama
           setCurrentData(prev => ({
             water_level: incoming.water_level,
             battery: incoming.battery_level || prev.battery,
@@ -120,16 +118,13 @@ export default function ProfessionalDashboard() {
             current_depth: incoming.water_level
           }));
 
-          // Kemaskini sejarah graf secara dinamik
           setChartHistory(prev => {
-            // Bersihkan label default permulaan jika ada
             const baseLabels = prev.labels.includes('Loading...') || prev.labels.includes('No Data') || prev.labels.includes('Waiting...') ? [] : prev.labels;
             const baseValues = baseLabels.length === 0 ? [] : prev.values;
 
             const newLabels = [...baseLabels, timestamp];
             const newValues = [...baseValues, incoming.water_level];
 
-            // Hadkan hanya 10 data terakhir
             if (newLabels.length > 10) {
               newLabels.shift();
               newValues.shift();
@@ -144,47 +139,86 @@ export default function ProfessionalDashboard() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedStation]); // <--- Hook ini berjalan semula setiap kali selectedStation bertukar
+  }, [selectedStation]);
 
-  // 4. STRUKTUR DATA DARI STATE UNTUK CHART.JS
+  const handleToggleVideo = async () => {
+    setVideoLoading(true);
+    const targetStatus = !isLiveVideo ? "START" : "STOP";
+    
+    const { error } = await supabase
+      .from('camera_commands')
+      .upsert({ station_id: selectedStation, status: targetStatus }, { onConflict: 'station_id' });
+
+    if (!error) {
+      setIsLiveVideo(!isLiveVideo);
+      
+      if (targetStatus === "START") {
+        setTimeout(async () => {
+          setIsLiveVideo(false);
+          await supabase
+            .from('camera_commands')
+            .upsert({ station_id: selectedStation, status: "STOP" }, { onConflict: 'station_id' });
+        }, 120000);
+      }
+    }
+    setVideoLoading(false);
+  };
+
+  const handleTriggerTestAlert = async () => {
+    setTestAlertLoading(true);
+    
+    const { error } = await supabase
+      .from('flood_data')
+      .insert([
+        { 
+          station_id: selectedStation, 
+          water_level: 4.55, 
+          battery_level: 95, 
+          solar_voltage: 12.8 
+        }
+      ]);
+
+    if (!error) {
+      alert(`Test data sent successfully! Check Telegram group/chat for ${selectedStation} alert.`);
+    } else {
+      alert("Error sending test data: " + error.message);
+    }
+    setTestAlertLoading(false);
+  };
+
   const mainChartData = {
     labels: chartHistory.labels,
     datasets: [{
       label: 'Water Depth (m)',
       data: chartHistory.values,
-      borderColor: '#38bdf8',
+      borderColor: '#cc0000', 
       backgroundColor: (context: any) => {
         const ctx = context.chart.ctx;
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(56, 189, 248, 0.3)');
-        gradient.addColorStop(1, 'rgba(56, 189, 248, 0)');
+        gradient.addColorStop(0, 'rgba(204, 0, 0, 0.15)');
+        gradient.addColorStop(1, 'rgba(204, 0, 0, 0)');
         return gradient;
       },
       fill: true,
       tension: 0.4,
       pointRadius: 4,
-      pointBackgroundColor: '#38bdf8'
+      pointBackgroundColor: '#cc0000'
     }]
   };
 
   return (
-    <div className="flex h-screen bg-[#0b1120] text-slate-300 font-sans overflow-hidden">
-      {/* 1. SIDEBAR */}
-      <aside className="w-64 bg-[#111827] border-r border-slate-800 flex flex-col">
-        <div className="p-4 flex items-center justify-center border-b border-slate-800/50 bg-black/20">
+    // DIUBAH: Latar belakang aplikasi ditukar kepada putih/kelabu cair korporat moden
+    <div className="flex h-screen bg-[#f8fafc] text-slate-700 font-sans overflow-hidden">
+      
+      {/* 1. SIDEBAR - DIUBAH KEPADA PURE WHITE SEPADAN BACKGROUND LOGO THB */}
+      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm">
+        <div className="p-4 flex items-center justify-center border-b border-slate-100 bg-white">
           <div className="relative w-44 h-20">
-            <Image 
-              src="/thb-logo.jpeg" 
-              alt="THB Logo"
-              fill
-              priority 
-              className="object-contain" 
-            />
+            <Image src="/thb-logo.jpeg" alt="THB Logo" fill priority className="object-contain" />
           </div>
         </div>
         
-        {/* Menu Navigasi */}
-        <nav className="flex-grow px-4 space-y-1 pt-4">
+        <nav className="flex-grow px-4 space-y-1 pt-6">
           <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active />
           <NavItem icon={<Radio size={20}/>} label="Sensors" />
           <NavItem icon={<FileText size={20}/>} label="Reports" />
@@ -192,7 +226,7 @@ export default function ProfessionalDashboard() {
           <NavItem icon={<Settings size={20}/>} label="Settings" />
         </nav>
 
-        <div className="p-4 border-t border-slate-800 space-y-1">
+        <div className="p-4 border-t border-slate-100 space-y-1">
           <NavItem icon={<Settings size={20}/>} label="Settings" />
           <NavItem icon={<LogOut size={20}/>} label="Log Out" />
         </div>
@@ -200,135 +234,186 @@ export default function ProfessionalDashboard() {
 
       {/* 2. MAIN CONTENT AREA */}
       <main className="flex-grow flex flex-col overflow-hidden">
-        {/* Top Header Bar */}
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-[#0b1120]/50 backdrop-blur-md">
+        {/* Top Header Bar - DIUBAH KEPADA PURE WHITE */}
+        <header className="h-16 border-b border-slate-200 flex items-center justify-between px-8 bg-white shadow-sm z-10">
           <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <input 
               type="text" 
               placeholder="Search station or alerts..." 
-              className="w-full bg-[#1e293b] border-none rounded-full py-2 pl-10 pr-4 text-sm focus:ring-1 focus:ring-sky-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#cc0000] text-slate-700"
             />
           </div>
           <div className="flex items-center gap-6">
             <div className="relative">
-              <Bell size={20} className="text-slate-400" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] flex items-center justify-center text-white font-bold">3</span>
+              <Bell size={20} className="text-slate-500 cursor-pointer" />
+              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#cc0000] rounded-full text-[10px] flex items-center justify-center text-white font-bold">3</span>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 border-l border-slate-200 pl-6">
               <div className="text-right">
-                <p className="text-sm font-medium text-white">Iskandar Z.</p>
-                <p className="text-[10px] text-slate-500 uppercase">Project Manager</p>
+                <p className="text-sm font-semibold text-slate-800">Iskandar Z.</p>
+                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Project Manager</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-slate-700 border border-slate-600 overflow-hidden">
-                 <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=0ea5e9&color=fff" alt="Profile" />
+              <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+                 <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
               </div>
             </div>
           </div>
         </header>
 
-        {/* Dashboard Grid */}
+        {/* Dashboard Grid - DIUBAH KEPADA KAD-KAD CERAH (WHITE CARD SHADOW) */}
         <div className="flex-grow p-6 overflow-y-auto space-y-6">
           <div className="grid grid-cols-12 gap-6">
             
             {/* Real-time Water Level Card (Wide) */}
-            <div className="col-span-8 bg-[#111827] rounded-2xl border border-slate-800 p-6">
-              <div className="flex justify-between items-start mb-8">
-                <div>
-                  <h3 className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Real-time Water Level</h3>
-                  <div className="flex items-baseline gap-4 mt-2">
-                    <span className="text-5xl font-bold text-white tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
-                    <div className="flex items-center text-sky-400 text-sm font-bold uppercase gap-1">
-                      <TrendingUp size={16} /> Live Streaming
-                    </div>
+            <div className="col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+              
+              {/* PANEL BAHARU: BUTANG PERINTAH STRIM & TELEGRAM */}
+              <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4 mb-6">
+                <div className="flex items-center gap-3">
+                  {/* DROPDOWN MULTI STATION */}
+                  <div className="relative inline-block">
+                    <select 
+                      value={selectedStation} 
+                      onChange={(e) => setSelectedStation(e.target.value)}
+                      className="appearance-none bg-slate-50 text-slate-800 text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
+                    >
+                      {STATIONS.map((station) => (
+                        <option key={station.id} value={station.id}>
+                          {station.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
                   </div>
                 </div>
 
-                {/* DROPDOWN MULTI STATION SELECTION */}
-                <div className="relative inline-block">
-                  <select 
-                    value={selectedStation} 
-                    onChange={(e) => setSelectedStation(e.target.value)}
-                    className="appearance-none bg-[#1e293b] text-white text-sm font-medium pl-4 pr-10 py-2 rounded-xl border border-slate-700 focus:outline-none focus:ring-1 focus:ring-sky-500 cursor-pointer"
+                <div className="flex items-center gap-3">
+                  {/* DIUBAH: NAMA BUTANG KEPADA BUKA LIVE STREAM & GUNA ICON STRIM INTERAKTIF */}
+                  <button
+                    onClick={handleToggleVideo}
+                    disabled={videoLoading}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
+                      isLiveVideo 
+                        ? 'bg-red-600 border-red-700 text-white animate-pulse' 
+                        : 'bg-[#1e293b] border-slate-900 text-white hover:bg-slate-800'
+                    }`}
                   >
-                    {STATIONS.map((station) => (
-                      <option key={station.id} value={station.id}>
-                        {station.name}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                    {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
+                    {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
+                  </button>
+
+                  {/* BUTANG 2: UJIAN NOTIFIKASI TELEGRAM */}
+                  <button
+                    onClick={handleTriggerTestAlert}
+                    disabled={testAlertLoading}
+                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
+                  >
+                    <Send size={14} />
+                    {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
+                  </button>
                 </div>
               </div>
 
-              <div className="h-[250px] w-full">
-                <Line data={mainChartData} options={chartOptions} />
+              <div className="flex justify-between items-start mb-6">
+                <div>
+                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Real-time Water Level</h3>
+                  <div className="flex items-baseline gap-4 mt-2">
+                    <span className="text-5xl font-extrabold text-slate-900 tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
+                    <div className="flex items-center text-[#cc0000] text-xs font-bold uppercase gap-1 bg-red-50 px-2 py-0.5 rounded">
+                      <TrendingUp size={14} /> Live Streaming Active
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              {/* DIUBAH: CONTAINER LIVE VIEW MENGGUNAKAN VIDEO DUMMY KALI INI */}
+              {isLiveVideo ? (
+                <div className="w-full h-[250px] bg-black rounded-xl border border-slate-200 mb-2 overflow-hidden relative shadow-inner">
+                  <video 
+                    src="/dummy-flood-stream.mp4" 
+                    autoPlay 
+                    loop 
+                    muted 
+                    playsInline
+                    className="w-full h-full object-cover"
+                  />
+                  <div className="absolute top-3 left-3 bg-red-600 text-[9px] font-black uppercase text-white px-2 py-0.5 rounded animate-pulse tracking-widest">
+                    LIVE STREAM FEED ({selectedStation})
+                  </div>
+                  <div className="absolute bottom-3 right-3 bg-black/60 text-[9px] text-slate-300 px-2 py-0.5 rounded backdrop-blur-sm font-mono">
+                    2 MIN AUTO-TIMEOUT KESELAMATAN BATERI
+                  </div>
+                </div>
+              ) : (
+                <div className="h-[250px] w-full">
+                  <Line data={mainChartData} options={chartOptions} />
+                </div>
+              )}
             </div>
 
             {/* Gauges Column */}
             <div className="col-span-4 space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-500" : "text-emerald-400"} />
-                <GaugeCard label="Max 24h Depth" value={`${currentData.max_24h.toFixed(2)}m`} subLabel="Tracked" color="text-sky-400" />
+                <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-600" : "text-emerald-500"} />
+                <GaugeCard label="Max 24h Depth" value={`${currentData.max_24h.toFixed(2)}m`} subLabel="Tracked" color="text-[#cc0000]" />
               </div>
               
               {/* Solar & Battery Health */}
-              <div className="bg-[#111827] rounded-2xl border border-slate-800 p-5 space-y-6">
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-6 shadow-sm">
                 <div>
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
-                    <Sun size={14} /> Solar Panel Health
+                    <Sun size={14} className="text-amber-500" /> Solar Panel Health
                   </div>
-                  <p className="text-sm font-medium text-white">Solar Voltage: <span className="text-sky-400">{currentData.solar_v.toFixed(1)}V</span></p>
-                  <p className="text-[10px] text-green-400 mt-1 uppercase font-bold">
+                  <p className="text-sm font-semibold text-slate-800">Solar Voltage: <span className="text-[#cc0000]">{currentData.solar_v.toFixed(1)}V</span></p>
+                  <p className="text-[10px] text-emerald-600 mt-1 uppercase font-extrabold italic">
                     Status: {currentData.solar_v > 12.0 ? "Charging (Normal)" : "No Input / Night"}
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-slate-800">
+                <div className="pt-4 border-t border-slate-100">
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-3">
-                    <Battery size={14} /> Battery Health
+                    <Battery size={14} className="text-emerald-500" /> Battery Health
                   </div>
-                  <div className="flex justify-between text-sm mb-2">
-                    <span className="text-white">Battery: <span className="text-orange-400">{currentData.battery}%</span></span>
+                  <div className="flex justify-between text-sm mb-2 font-medium">
+                    <span className="text-slate-700">Battery: <span className="text-slate-900 font-bold">{currentData.battery}%</span></span>
                   </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                    <div className="bg-orange-400 h-full transition-all duration-500" style={{ width: `${currentData.battery}%`, boxShadow: '0 0 10px rgba(251, 146, 60, 0.4)' }}></div>
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${currentData.battery}%` }}></div>
                   </div>
-                  <div className="flex justify-between mt-3 text-[10px]">
-                    <span className="text-slate-500 uppercase font-bold">Node ID: {selectedStation}</span>
-                    <span className="text-green-400 uppercase font-bold italic">Online</span>
+                  <div className="flex justify-between mt-3 text-[10px] font-bold">
+                    <span className="text-slate-400 uppercase">Node ID: {selectedStation}</span>
+                    <span className="text-emerald-600 uppercase italic">Online</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Map Section */}
-            <div className="col-span-8 bg-[#111827] rounded-2xl border border-slate-800 p-6">
+            <div className="col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                 <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Sensor Locations</h3>
-                <div className="h-[200px] bg-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center">
-                   <p className="text-slate-600 text-sm">Industrial Map Integration (Google Maps/Leaflet)</p>
-                   {/* Simbol animasi ping di peta berubah mengikut stesen aktif */}
-                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-sky-400 rounded-full animate-ping"></div>
-                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-sky-400 rounded-full border-2 border-white"></div>
-                   <div className="absolute top-1/3 right-1/4 text-xs text-slate-500 bg-slate-800 px-2 py-1 rounded border border-slate-700">
+                <div className="h-[200px] bg-slate-50 border border-slate-100 rounded-xl relative overflow-hidden flex items-center justify-center">
+                   <p className="text-slate-400 text-xs font-medium">Industrial Map Integration (Google Maps/Leaflet)</p>
+                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full animate-ping"></div>
+                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-white"></div>
+                   <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
                      Active Node: {selectedStation}
                    </div>
                 </div>
             </div>
 
             {/* Alert Feed */}
-            <div className="col-span-4 bg-[#111827] rounded-2xl border border-slate-800 p-6">
+            <div className="col-span-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
                <div className="flex justify-between items-center mb-6">
                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
-                 <Settings size={14} className="text-slate-600" />
+                 <Settings size={14} className="text-slate-400 cursor-pointer hover:text-slate-700" />
                </div>
                <div className="space-y-4">
                  {currentData.water_level > 4.0 && (
-                   <AlertItem time="NOW" type="CRITICAL" stationId={selectedStation} text={`Exceeded 4.0m threshold at ${selectedStation}!`} color="text-red-500" />
+                   <AlertItem time="NOW" type="CRITICAL" stationId={selectedStation} text={`Exceeded 4.0m threshold at ${selectedStation}!`} color="text-red-600 bg-red-50 border-red-200" />
                  )}
-                 <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-orange-500" />
-                 <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-yellow-500" />
+                 <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-amber-600 bg-amber-50 border-amber-200" />
+                 <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-slate-600 bg-slate-50 border-slate-200" />
                </div>
             </div>
 
@@ -341,38 +426,42 @@ export default function ProfessionalDashboard() {
 
 function NavItem({ icon, label, active = false }: any) {
   return (
-    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition ${active ? 'bg-sky-500/10 text-sky-400 border border-sky-500/20 shadow-lg shadow-sky-500/5' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all ${
+      active 
+        ? 'bg-red-50 text-[#cc0000] font-bold border border-red-100/80 shadow-sm shadow-red-500/5' 
+        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+    }`}>
       {icon}
-      <span className="text-sm font-medium">{label}</span>
+      <span className="text-sm font-semibold">{label}</span>
     </div>
   );
 }
 
 function GaugeCard({ label, value, subLabel, color }: any) {
   return (
-    <div className="bg-[#111827] rounded-2xl border border-slate-800 p-4 text-center">
-      <div className="w-20 h-20 mx-auto relative mb-3">
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center shadow-sm">
+      <div className="w-18 h-18 mx-auto relative mb-3">
          <svg className="w-full h-full" viewBox="0 0 36 36">
-            <path className="stroke-slate-800" strokeWidth="3" fill="none" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path className="stroke-slate-100" strokeWidth="3" fill="none" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
             <path className={`stroke-current ${color}`} strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="75, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
          </svg>
-         <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-500 uppercase font-bold">{subLabel}</div>
+         <div className="absolute inset-0 flex items-center justify-center text-[9px] text-slate-400 uppercase font-black">{subLabel}</div>
       </div>
-      <p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest mb-1">{label}</p>
-      <p className="text-lg font-bold text-white">{value}</p>
+      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest mb-1">{label}</p>
+      <p className="text-lg font-extrabold text-slate-900">{value}</p>
     </div>
   );
 }
 
 function AlertItem({ time, type, stationId, text, color }: any) {
   return (
-    <div className="flex gap-4 p-3 rounded-lg hover:bg-slate-800/50 transition border-l-2 border-transparent hover:border-sky-500">
-      <span className="text-[10px] text-slate-600 font-mono mt-1">{time}</span>
+    <div className={`flex gap-4 p-3 rounded-xl border transition-all ${color}`}>
+      <span className="text-[10px] text-slate-400 font-mono font-bold mt-0.5">{time}</span>
       <div>
-        <p className="text-[10px] font-bold uppercase mb-1">
-          <span className={color}>{type}:</span> <span className="text-slate-400">Station {stationId}</span>
+        <p className="text-[10px] font-black uppercase mb-0.5">
+          <span>{type}:</span> <span className="opacity-70">Station {stationId}</span>
         </p>
-        <p className="text-xs text-slate-300 leading-tight">{text}</p>
+        <p className="text-xs text-slate-700 leading-tight font-medium">{text}</p>
       </div>
     </div>
   );
@@ -384,12 +473,12 @@ const chartOptions: any = {
   plugins: { legend: { display: false } },
   scales: {
     y: { 
-      grid: { color: '#1e293b', drawBorder: false },
-      ticks: { color: '#475569', font: { size: 10 } }
+      grid: { color: '#f1f5f9', drawBorder: false },
+      ticks: { color: '#94a3b8', font: { size: 10, weight: 'bold' } }
     },
     x: { 
       grid: { display: false },
-      ticks: { color: '#475569', font: { size: 10 } }
+      ticks: { color: '#94a3b8', font: { size: 10, weight: 'bold' } }
     }
   }
 };
