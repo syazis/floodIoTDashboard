@@ -191,28 +191,28 @@ export default function ProfessionalDashboard() {
     datasets: [{
       label: 'Water Depth (m)',
       data: chartHistory.values,
-      borderColor: '#cc0000', 
+      borderColor: '#0ea5e9', // DIUBAH: Garisan graf menggunakan Cyber Blue untuk contrast tinggi
       backgroundColor: (context: any) => {
         const ctx = context.chart.ctx;
         const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(204, 0, 0, 0.15)');
-        gradient.addColorStop(1, 'rgba(204, 0, 0, 0)');
+        gradient.addColorStop(0, 'rgba(14, 165, 233, 0.25)'); // Glow kesan biru cair
+        gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
         return gradient;
       },
       fill: true,
       tension: 0.4,
       pointRadius: 4,
-      pointBackgroundColor: '#cc0000'
+      pointBackgroundColor: '#0ea5e9'
     }]
   };
 
   return (
-    // DIUBAH: Latar belakang aplikasi ditukar kepada putih/kelabu cair korporat moden
-    <div className="flex h-screen bg-[#f8fafc] text-slate-700 font-sans overflow-hidden">
+    // DIUBAH: Latar belakang asas ditukar kepada warna Hitam Pekat (#050505) sepadan logo THB
+    <div className="flex h-screen bg-[#050505] text-slate-300 font-sans overflow-hidden">
       
-      {/* 1. SIDEBAR - DIUBAH KEPADA PURE WHITE SEPADAN BACKGROUND LOGO THB */}
-      <aside className="w-64 bg-white border-r border-slate-200 flex flex-col shadow-sm">
-        <div className="p-4 flex items-center justify-center border-b border-slate-100 bg-white">
+      {/* 1. SIDEBAR - DIUBAH KEPADA HITAM PANEL (#0f0f0f) */}
+      <aside className="w-64 bg-[#0f0f0f] border-r border-slate-800 flex flex-col shadow-lg">
+        <div className="p-4 flex items-center justify-center border-b border-slate-800 bg-black">
           <div className="relative w-44 h-20">
             <Image src="/thb-logo.jpeg" alt="THB Logo" fill priority className="object-contain" />
           </div>
@@ -226,7 +226,7 @@ export default function ProfessionalDashboard() {
           <NavItem icon={<Settings size={20}/>} label="Settings" />
         </nav>
 
-        <div className="p-4 border-t border-slate-100 space-y-1">
+        <div className="p-4 border-t border-slate-800 space-y-1">
           <NavItem icon={<Settings size={20}/>} label="Settings" />
           <NavItem icon={<LogOut size={20}/>} label="Log Out" />
         </div>
@@ -234,49 +234,48 @@ export default function ProfessionalDashboard() {
 
       {/* 2. MAIN CONTENT AREA */}
       <main className="flex-grow flex flex-col overflow-hidden">
-        {/* Top Header Bar - DIUBAH KEPADA PURE WHITE */}
-        <header className="h-16 border-b border-slate-200 flex items-center justify-between px-8 bg-white shadow-sm z-10">
+        {/* Top Header Bar - DIUBAH KEPADA HITAM PANEL */}
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-[#0f0f0f] z-10">
           <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
             <input 
               type="text" 
               placeholder="Search station or alerts..." 
-              className="w-full bg-slate-50 border border-slate-200 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#cc0000] text-slate-700"
+              className="w-full bg-[#161616] border border-slate-800 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#cc0000] text-slate-200"
             />
           </div>
           <div className="flex items-center gap-6">
             <div className="relative">
-              <Bell size={20} className="text-slate-500 cursor-pointer" />
+              <Bell size={20} className="text-slate-400 cursor-pointer hover:text-white" />
               <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#cc0000] rounded-full text-[10px] flex items-center justify-center text-white font-bold">3</span>
             </div>
-            <div className="flex items-center gap-3 border-l border-slate-200 pl-6">
+            <div className="flex items-center gap-3 border-l border-slate-800 prefix pl-6">
               <div className="text-right">
-                <p className="text-sm font-semibold text-slate-800">Iskandar Z.</p>
-                <p className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Project Manager</p>
+                <p className="text-sm font-semibold text-white">Iskandar Z.</p>
+                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Project Manager</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+              <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
                  <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
               </div>
             </div>
           </div>
         </header>
 
-        {/* Dashboard Grid - DIUBAH KEPADA KAD-KAD CERAH (WHITE CARD SHADOW) */}
-        <div className="flex-grow p-6 overflow-y-auto space-y-6">
+        {/* Dashboard Grid - KAD DITUKAR KEPADA HITAM GELAP (#0f0f0f) */}
+        <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-[#050505]">
           <div className="grid grid-cols-12 gap-6">
             
             {/* Real-time Water Level Card (Wide) */}
-            <div className="col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
               
-              {/* PANEL BAHARU: BUTANG PERINTAH STRIM & TELEGRAM */}
-              <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-100 pb-4 mb-6">
+              {/* PANEL ATAS: STRIM & TELEGRAM KAWALAN */}
+              <div className="flex flex-wrap justify-between items-center gap-4 border-b border-slate-800 pb-4 mb-6">
                 <div className="flex items-center gap-3">
-                  {/* DROPDOWN MULTI STATION */}
                   <div className="relative inline-block">
                     <select 
                       value={selectedStation} 
                       onChange={(e) => setSelectedStation(e.target.value)}
-                      className="appearance-none bg-slate-50 text-slate-800 text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-200 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
+                      className="appearance-none bg-[#161616] text-white text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
                     >
                       {STATIONS.map((station) => (
                         <option key={station.id} value={station.id}>
@@ -284,30 +283,30 @@ export default function ProfessionalDashboard() {
                         </option>
                       ))}
                     </select>
-                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+                    <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                   </div>
                 </div>
 
                 <div className="flex items-center gap-3">
-                  {/* DIUBAH: NAMA BUTANG KEPADA BUKA LIVE STREAM & GUNA ICON STRIM INTERAKTIF */}
+                  {/* BUTANG BUKA LIVE STREAM */}
                   <button
                     onClick={handleToggleVideo}
                     disabled={videoLoading}
                     className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
                       isLiveVideo 
-                        ? 'bg-red-600 border-red-700 text-white animate-pulse' 
-                        : 'bg-[#1e293b] border-slate-900 text-white hover:bg-slate-800'
+                        ? 'bg-[#cc0000] border-red-700 text-white animate-pulse' 
+                        : 'bg-[#161616] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
                     }`}
                   >
                     {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
                     {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
                   </button>
 
-                  {/* BUTANG 2: UJIAN NOTIFIKASI TELEGRAM */}
+                  {/* BUTANG UJIAN TELEGRAM */}
                   <button
                     onClick={handleTriggerTestAlert}
                     disabled={testAlertLoading}
-                    className="flex items-center gap-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
+                    className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
                   >
                     <Send size={14} />
                     {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
@@ -319,17 +318,17 @@ export default function ProfessionalDashboard() {
                 <div>
                   <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Real-time Water Level</h3>
                   <div className="flex items-baseline gap-4 mt-2">
-                    <span className="text-5xl font-extrabold text-slate-900 tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
-                    <div className="flex items-center text-[#cc0000] text-xs font-bold uppercase gap-1 bg-red-50 px-2 py-0.5 rounded">
+                    <span className="text-5xl font-extrabold text-white tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
+                    <div className="flex items-center text-[#cc0000] text-xs font-bold uppercase gap-1 bg-red-950/40 px-2 py-0.5 rounded border border-red-900/50">
                       <TrendingUp size={14} /> Live Streaming Active
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* DIUBAH: CONTAINER LIVE VIEW MENGGUNAKAN VIDEO DUMMY KALI INI */}
+              {/* DYNAMIC DISPLAY VIDEO DUMMY VS GRAPH */}
               {isLiveVideo ? (
-                <div className="w-full h-[250px] bg-black rounded-xl border border-slate-200 mb-2 overflow-hidden relative shadow-inner">
+                <div className="w-full h-[250px] bg-black rounded-xl border border-slate-800 mb-2 overflow-hidden relative shadow-inner">
                   <video 
                     src="/dummy-flood-stream.mp4" 
                     autoPlay 
@@ -338,10 +337,10 @@ export default function ProfessionalDashboard() {
                     playsInline
                     className="w-full h-full object-cover"
                   />
-                  <div className="absolute top-3 left-3 bg-red-600 text-[9px] font-black uppercase text-white px-2 py-0.5 rounded animate-pulse tracking-widest">
+                  <div className="absolute top-3 left-3 bg-[#cc0000] text-[9px] font-black uppercase text-white px-2 py-0.5 rounded animate-pulse tracking-widest">
                     LIVE STREAM FEED ({selectedStation})
                   </div>
-                  <div className="absolute bottom-3 right-3 bg-black/60 text-[9px] text-slate-300 px-2 py-0.5 rounded backdrop-blur-sm font-mono">
+                  <div className="absolute bottom-3 right-3 bg-black/70 text-[9px] text-slate-400 px-2 py-0.5 rounded backdrop-blur-sm font-mono border border-slate-800">
                     2 MIN AUTO-TIMEOUT KESELAMATAN BATERI
                   </div>
                 </div>
@@ -355,65 +354,65 @@ export default function ProfessionalDashboard() {
             {/* Gauges Column */}
             <div className="col-span-4 space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-600" : "text-emerald-500"} />
+                <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-500" : "text-emerald-400"} />
                 <GaugeCard label="Max 24h Depth" value={`${currentData.max_24h.toFixed(2)}m`} subLabel="Tracked" color="text-[#cc0000]" />
               </div>
               
-              {/* Solar & Battery Health */}
-              <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-6 shadow-sm">
+              {/* Solar & Battery Health - DIUBAH AKSEN KE BIRU CYBER (#0ea5e9) */}
+              <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-5 space-y-6 shadow-sm">
                 <div>
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
                     <Sun size={14} className="text-amber-500" /> Solar Panel Health
                   </div>
-                  <p className="text-sm font-semibold text-slate-800">Solar Voltage: <span className="text-[#cc0000]">{currentData.solar_v.toFixed(1)}V</span></p>
-                  <p className="text-[10px] text-emerald-600 mt-1 uppercase font-extrabold italic">
+                  <p className="text-sm font-semibold text-white">Solar Voltage: <span className="text-[#0ea5e9]">{currentData.solar_v.toFixed(1)}V</span></p>
+                  <p className="text-[10px] text-emerald-400 mt-1 uppercase font-extrabold italic">
                     Status: {currentData.solar_v > 12.0 ? "Charging (Normal)" : "No Input / Night"}
                   </p>
                 </div>
 
-                <div className="pt-4 border-t border-slate-100">
+                <div className="pt-4 border-t border-slate-800">
                   <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-3">
-                    <Battery size={14} className="text-emerald-500" /> Battery Health
+                    <Battery size={14} className="text-[#0ea5e9]" /> Battery Health
                   </div>
                   <div className="flex justify-between text-sm mb-2 font-medium">
-                    <span className="text-slate-700">Battery: <span className="text-slate-900 font-bold">{currentData.battery}%</span></span>
+                    <span className="text-slate-300">Battery: <span className="text-white font-bold">{currentData.battery}%</span></span>
                   </div>
-                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                    <div className="bg-emerald-500 h-full transition-all duration-500" style={{ width: `${currentData.battery}%` }}></div>
+                  <div className="w-full bg-[#161616] h-2 rounded-full overflow-hidden border border-slate-800">
+                    <div className="bg-[#0ea5e9] h-full transition-all duration-500 shadow-[0_0_10px_rgba(14,165,233,0.5)]" style={{ width: `${currentData.battery}%` }}></div>
                   </div>
                   <div className="flex justify-between mt-3 text-[10px] font-bold">
-                    <span className="text-slate-400 uppercase">Node ID: {selectedStation}</span>
-                    <span className="text-emerald-600 uppercase italic">Online</span>
+                    <span className="text-slate-500 uppercase">Node ID: {selectedStation}</span>
+                    <span className="text-emerald-400 uppercase italic">Online</span>
                   </div>
                 </div>
               </div>
             </div>
 
             {/* Map Section */}
-            <div className="col-span-8 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
                 <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Sensor Locations</h3>
-                <div className="h-[200px] bg-slate-50 border border-slate-100 rounded-xl relative overflow-hidden flex items-center justify-center">
-                   <p className="text-slate-400 text-xs font-medium">Industrial Map Integration (Google Maps/Leaflet)</p>
+                <div className="h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center">
+                   <p className="text-slate-600 text-xs font-medium">Industrial Map Integration (Google Maps/Leaflet)</p>
                    <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full animate-ping"></div>
-                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-white"></div>
-                   <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-600 bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm">
+                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-slate-900"></div>
+                   <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-400 bg-[#161616] px-3 py-1.5 rounded-xl border border-slate-800 shadow-sm">
                      Active Node: {selectedStation}
                    </div>
                 </div>
             </div>
 
             {/* Alert Feed */}
-            <div className="col-span-4 bg-white rounded-2xl border border-slate-200 p-6 shadow-sm">
+            <div className="col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
                <div className="flex justify-between items-center mb-6">
                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
-                 <Settings size={14} className="text-slate-400 cursor-pointer hover:text-slate-700" />
+                 <Settings size={14} className="text-slate-500 cursor-pointer hover:text-slate-300" />
                </div>
                <div className="space-y-4">
                  {currentData.water_level > 4.0 && (
-                   <AlertItem time="NOW" type="CRITICAL" stationId={selectedStation} text={`Exceeded 4.0m threshold at ${selectedStation}!`} color="text-red-600 bg-red-50 border-red-200" />
+                   <AlertItem time="NOW" type="CRITICAL" stationId={selectedStation} text={`Exceeded 4.0m threshold at ${selectedStation}!`} color="text-red-400 bg-red-950/20 border-red-900/50" />
                  )}
-                 <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-amber-600 bg-amber-50 border-amber-200" />
-                 <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-slate-600 bg-slate-50 border-slate-200" />
+                 <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-amber-400 bg-amber-950/20 border-amber-900/50" />
+                 <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-slate-400 bg-slate-900/40 border-slate-800" />
                </div>
             </div>
 
@@ -428,8 +427,8 @@ function NavItem({ icon, label, active = false }: any) {
   return (
     <div className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all ${
       active 
-        ? 'bg-red-50 text-[#cc0000] font-bold border border-red-100/80 shadow-sm shadow-red-500/5' 
-        : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+        ? 'bg-red-950/40 text-[#cc0000] font-bold border border-red-900/50 shadow-md' 
+        : 'text-slate-400 hover:bg-[#161616] hover:text-white'
     }`}>
       {icon}
       <span className="text-sm font-semibold">{label}</span>
@@ -439,16 +438,16 @@ function NavItem({ icon, label, active = false }: any) {
 
 function GaugeCard({ label, value, subLabel, color }: any) {
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center shadow-sm">
+    <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 text-center shadow-sm">
       <div className="w-18 h-18 mx-auto relative mb-3">
          <svg className="w-full h-full" viewBox="0 0 36 36">
-            <path className="stroke-slate-100" strokeWidth="3" fill="none" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+            <path className="stroke-slate-800" strokeWidth="3" fill="none" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
             <path className={`stroke-current ${color}`} strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="75, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
          </svg>
-         <div className="absolute inset-0 flex items-center justify-center text-[9px] text-slate-400 uppercase font-black">{subLabel}</div>
+         <div className="absolute inset-0 flex items-center justify-center text-[9px] text-slate-500 uppercase font-black">{subLabel}</div>
       </div>
       <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest mb-1">{label}</p>
-      <p className="text-lg font-extrabold text-slate-900">{value}</p>
+      <p className="text-lg font-extrabold text-white">{value}</p>
     </div>
   );
 }
@@ -456,12 +455,12 @@ function GaugeCard({ label, value, subLabel, color }: any) {
 function AlertItem({ time, type, stationId, text, color }: any) {
   return (
     <div className={`flex gap-4 p-3 rounded-xl border transition-all ${color}`}>
-      <span className="text-[10px] text-slate-400 font-mono font-bold mt-0.5">{time}</span>
+      <span className="text-[10px] text-slate-500 font-mono font-bold mt-0.5">{time}</span>
       <div>
         <p className="text-[10px] font-black uppercase mb-0.5">
           <span>{type}:</span> <span className="opacity-70">Station {stationId}</span>
         </p>
-        <p className="text-xs text-slate-700 leading-tight font-medium">{text}</p>
+        <p className="text-xs text-slate-300 leading-tight font-medium">{text}</p>
       </div>
     </div>
   );
@@ -473,12 +472,12 @@ const chartOptions: any = {
   plugins: { legend: { display: false } },
   scales: {
     y: { 
-      grid: { color: '#f1f5f9', drawBorder: false },
-      ticks: { color: '#94a3b8', font: { size: 10, weight: 'bold' } }
+      grid: { color: '#161616', drawBorder: false },
+      ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } }
     },
     x: { 
       grid: { display: false },
-      ticks: { color: '#94a3b8', font: { size: 10, weight: 'bold' } }
+      ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } }
     }
   }
 };
