@@ -477,15 +477,26 @@ function AlertItem({ time, type, stationId, text, color }: any) {
 const chartOptions: any = {
   responsive: true,
   maintainAspectRatio: false,
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false } 
+  },
   scales: {
     y: { 
-      grid: { color: '#161616', drawBorder: false },
-      ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } }
+      grid: { 
+        color: '#1e293b', // Garisan grid warna slate gelap
+        drawBorder: false 
+      },
+      ticks: { 
+        color: '#ffffff', // 🌟 TUKAR KE PUTIH: Supaya angka meter air kelihatan jelas
+        font: { size: 11, weight: 'bold' } 
+      }
     },
     x: { 
       grid: { display: false },
-      ticks: { color: '#64748b', font: { size: 10, weight: 'bold' } }
+      ticks: { 
+        color: '#ffffff', // 🌟 TUKAR KE PUTIH: Supaya label masa/jam kelihatan jelas
+        font: { size: 10, weight: 'bold' } 
+      }
     }
   }
 };
