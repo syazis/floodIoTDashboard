@@ -149,24 +149,35 @@ export default function ProfessionalDashboard() {
 
   const handleToggleVideo = async () => {
     setVideoLoading(true);
-    const targetStatus = !isLiveVideo ? "START" : "STOP";
+    const nextVideoState = !isLiveVideo;
+    const targetStatus = nextVideoState ? "START" : "STOP";
     
-    const { error } = await supabase
-      .from('camera_commands')
-      .upsert({ station_id: selectedStation, status: targetStatus }, { onConflict: 'station_id' });
+    // 1. Paksa UI bertukar serta-merta supaya kotak video/CCTV terbuka di dashboard
+    setIsLiveVideo(nextVideoState);
 
-    if (!error) {
-      setIsLiveVideo(!isLiveVideo);
-      
-      if (targetStatus === "START") {
-        setTimeout(async () => {
-          setIsLiveVideo(false);
-          await supabase
-            .from('camera_commands')
-            .upsert({ station_id: selectedStation, status: "STOP" }, { onConflict: 'station_id' });
-        }, 120000);
+    // 2. Hantar arahan ke Supabase di latar belakang (tanpa menyekat UI)
+    try {
+      const { error } = await supabase
+        .from('camera_commands')
+        .upsert({ station_id: selectedStation, status: targetStatus }, { onConflict: 'station_id' });
+        
+      if (error) {
+        console.error("Ralat arahan kamera Supabase:", error.message);
       }
+    } catch (err) {
+      console.error("Gagal menyambung ke pelayan perintah:", err);
     }
+
+    // 3. Logik Auto-Timeout 2 minit kekal seperti asal
+    if (targetStatus === "START") {
+      setTimeout(async () => {
+        setIsLiveVideo(false);
+        await supabase
+          .from('camera_commands')
+          .upsert({ station_id: selectedStation, status: "STOP" }, { onConflict: 'station_id' });
+      }, 120000);
+    }
+    
     setVideoLoading(false);
   };
 
