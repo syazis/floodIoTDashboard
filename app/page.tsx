@@ -262,7 +262,7 @@ export default function ProfessionalDashboard() {
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Project Manager</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
-                 <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
+                  <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
               </div>
             </div>
           </div>
@@ -315,23 +315,26 @@ export default function ProfessionalDashboard() {
             </div>
           </div>
 
-          {/* RUANG VIDEO STRIM (COL-SPAN-12) - DINAMIK MEMBUKA RUANG KAWASAN CCTV ATAS */}
+          {/* 🌟 RUANG VIDEO STRIM (COL-SPAN-12) - MENGGUNAKAN NGROK HTTPS TUNNEL DENGAN HALAMAN /stream */}
           {isLiveVideo && (
             <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
-              <div className="w-full h-[400px] relative bg-slate-950">
-                <video 
-                  src="/dummy-flood-stream.mp4" 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline
-                  className="w-full h-full object-cover"
+              <div className="w-full h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
+                <img 
+                  src="https://8eb1-2001-e68-63b2-3e00-d85-7d9a-d82b-7679.ngrok-free.app/stream" // 👈 SILA GANTIKAN DENGAN URL NGROK AKTIF ANDA SEMENTARA DEMO
+                  alt="THB Flood Station Live Stream"
+                  className="w-full h-full object-contain bg-black"
+                  onError={(e) => {
+                    e.currentTarget.src = "https://images.unsplash.com/photo-1580256081112-e49377338b7f?q=80&w=600&auto=format&fit=crop"; 
+                    console.error("Gagal menyambung ke live stream ESP32-CAM.");
+                  }}
                 />
-                <div className="absolute top-4 left-4 bg-[#cc0000] text-[10px] font-black uppercase text-white px-3 py-1 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
-                  LIVE VIDEO STREAMING FEED ({selectedStation})
+                <div className="absolute top-4 left-4 flex items-center gap-2 bg-[#cc0000] text-[10px] font-black uppercase text-white px-3 py-1.5 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
+                  <span className="w-1.5 h-1.5 bg-white rounded-full block animate-ping"></span>
+                  LIVE CCTV FEED ({selectedStation})
                 </div>
-                <div className="absolute bottom-4 right-4 bg-black/80 text-[10px] text-slate-400 px-3 py-1.5 rounded-xl backdrop-blur-sm font-mono border border-slate-800 shadow-md">
-                  AUTO-TIMEOUT KESELAMATAN BATERI: 2 MINIT
+                <div className="absolute bottom-4 right-4 bg-black/80 text-[10px] text-emerald-400 px-3 py-1.5 rounded-xl backdrop-blur-sm font-mono border border-emerald-950 shadow-md flex items-center gap-1.5">
+                  <span className="w-1 h-1 bg-emerald-500 rounded-full block"></span>
+                  TUNNEL STATUS: PUBLIC HTTPS (NGROK) | TIMEOUT: 2 MIN
                 </div>
               </div>
             </div>
@@ -431,6 +434,7 @@ export default function ProfessionalDashboard() {
   );
 }
 
+// Sub-komponen tambahan dikekalkan
 function NavItem({ icon, label, active = false }: any) {
   return (
     <div className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all ${
@@ -483,18 +487,18 @@ const chartOptions: any = {
   scales: {
     y: { 
       grid: { 
-        color: '#1e293b', // Garisan grid warna slate gelap
+        color: '#1e293b', 
         drawBorder: false 
       },
       ticks: { 
-        color: '#ffffff', // 🌟 TUKAR KE PUTIH: Supaya angka meter air kelihatan jelas
+        color: '#ffffff', 
         font: { size: 11, weight: 'bold' } 
       }
     },
     x: { 
       grid: { display: false },
       ticks: { 
-        color: '#ffffff', // 🌟 TUKAR KE PUTIH: Supaya label masa/jam kelihatan jelas
+        color: '#ffffff', 
         font: { size: 10, weight: 'bold' } 
       }
     }
