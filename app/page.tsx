@@ -184,25 +184,52 @@ export default function ProfessionalDashboard() {
   const handleTriggerTestAlert = async () => {
     setTestAlertLoading(true);
     
-    const { error } = await supabase
-      .from('flood_data')
-      .insert([
-        { 
-          station_id: selectedStation, 
-          water_level: 4.55, 
-          battery_level: 95, 
-          solar_voltage: 12.8,
-          latitude: 3.1604,
-          longitude: 101.6963
-        }
-      ]);
+    // 1. Sediakan format mesej laporan interaktif berasaskan data semasa di dashboard
+    const statusAir = currentData.water_level >= 4.40 ? "🚨 BAHAYA (CRITICAL)" : "✅ NORMAL";
+    
+    const teksMesej = 
+`🔔 *LAPORAN SEGERA STESEN THB*
+---------------------------------------
+📍 *Stesen:* ${selectedStation}
+🌊 *Paras Air:* ${currentData.water_level.toFixed(2)} m (${statusAir})
+🔋 *Bateri:* ${currentData.battery}%
+☀️ *Solar:* ${currentData.solar_v.toFixed(1)} V
+🌐 *Koordinat:* ${currentData.latitude.toFixed(4)}, ${currentData.longitude.toFixed(4)}
+---------------------------------------
+⏱️ _Laporan diminta secara manual dari Live Dashboard oleh Pentadbir._`;
 
-    if (!error) {
-      alert(`Test data sent successfully! Check Telegram group/chat for ${selectedStation} alert.`);
-    } else {
-      alert("Error sending test data: " + error.message);
+    try {
+      // 2. Gunakan API Bot Telegram yang sama seperti di dalam kod ESP32 anda
+      const telegramToken = "8938370016:AAEzMuVy-08Vn9puh_e7ltRQykpJqUdoQtI";
+      const chatId = "-5219407609";
+      
+      const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
+      
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: teksMesej,
+          parse_mode: 'Markdown', // Membolehkan tulisan tebal/condong format markdown
+        }),
+      });
+
+      const resData = await response.json();
+
+      if (resData.ok) {
+        alert(`Berjaya! Laporan terkini Stesen ${selectedStation} telah dihantar ke grup Telegram.`);
+      } else {
+        alert(`Gagal menghantar ke Telegram: ${resData.description}`);
+      }
+    } catch (error: any) {
+      console.error("Ralat Telegram API:", error);
+      alert("Ralat sambungan rangkaian semasa menghantar Telegram alert.");
+    } finally {
+      setTestAlertLoading(false);
     }
-    setTestAlertLoading(false);
   };
 
   const mainChartData = {
