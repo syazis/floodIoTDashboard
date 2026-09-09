@@ -359,7 +359,7 @@ export default function ProfessionalDashboard() {
               <div className="w-full h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
                 <img 
                   //src="https://8eb1-2001-e68-63b2-3e00-d85-7d9a-d82b-7679.ngrok-free.app/stream" // 👈 SILA GANTIKAN DENGAN URL NGROK AKTIF ANDA SEMENTARA DEMO
-                  src="https://192.168.68.73:81/stream"
+                  src="http://192.168.68.73:81/stream"
                   alt="THB Flood Station Live Stream"
                   className="w-full h-full object-contain bg-black"
                   onError={(e) => {
