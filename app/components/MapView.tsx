@@ -3,17 +3,16 @@
 import React, { useState } from 'react';
 import { 
   Map as MapIcon, 
-  Layers, 
   MapPin, 
   Compass, 
-  Activity, 
   Droplets, 
   CloudRain, 
   Sun, 
   Battery, 
   Camera, 
   ArrowRight,
-  ShieldAlert
+  ShieldAlert,
+  WifiOff
 } from 'lucide-react';
 
 interface MapStation {
@@ -29,27 +28,12 @@ interface MapStation {
   rainIntensity: number;
   battery: number;
   solarV: number;
-  status: 'CRITICAL' | 'WARNING' | 'SAFE';
+  isOnline: boolean;
+  status: 'ONLINE' | 'OFFLINE';
   description: string;
 }
 
 const MAP_STATIONS: MapStation[] = [
-  {
-    id: 'FL01',
-    name: 'Station FL01',
-    river: 'Sg. Bunus',
-    lat: 3.1604,
-    lng: 101.6963,
-    xPct: 52,
-    yPct: 38,
-    waterLevel: 4.55,
-    dangerThreshold: 4.40,
-    rainIntensity: 38.5,
-    battery: 88,
-    solarV: 18.6,
-    status: 'CRITICAL',
-    description: 'Kawasan rendah berhampiran Jalan Tun Razak dan Kolam Takungan Bunus.',
-  },
   {
     id: 'FL02',
     name: 'Station FL02',
@@ -63,8 +47,26 @@ const MAP_STATIONS: MapStation[] = [
     rainIntensity: 12.0,
     battery: 94,
     solarV: 19.2,
-    status: 'WARNING',
-    description: 'Hulu Sg. Gombak berdekatan Jalan Kuching dan kawasan PWTC.',
+    isOnline: true,
+    status: 'ONLINE',
+    description: 'Hulu Sg. Gombak berdekatan Jalan Kuching dan kawasan PWTC. Stesen aktif memancarkan telemetri 4G LTE.',
+  },
+  {
+    id: 'FL01',
+    name: 'Station FL01',
+    river: 'Sg. Bunus',
+    lat: 3.1604,
+    lng: 101.6963,
+    xPct: 52,
+    yPct: 38,
+    waterLevel: 3.45,
+    dangerThreshold: 4.40,
+    rainIntensity: 0.0,
+    battery: 42,
+    solarV: 0.0,
+    isOnline: false,
+    status: 'OFFLINE',
+    description: 'Kawasan rendah berhampiran Kolam Takungan Bunus. (Status: Terputus hubungan sejak 3 jam lalu).',
   },
   {
     id: 'FL03',
@@ -76,11 +78,12 @@ const MAP_STATIONS: MapStation[] = [
     yPct: 62,
     waterLevel: 3.98,
     dangerThreshold: 4.40,
-    rainIntensity: 22.4,
-    battery: 68,
-    solarV: 14.1,
-    status: 'WARNING',
-    description: 'Pertemuan Sg. Klang dan Sg. Gombak berhampiran pintu SMART Tunnel.',
+    rainIntensity: 0.0,
+    battery: 35,
+    solarV: 0.0,
+    isOnline: false,
+    status: 'OFFLINE',
+    description: 'Pertemuan Sg. Klang dan Sg. Gombak berhampiran pintu SMART Tunnel. (Status: Tiada isyarat LoRa).',
   },
   {
     id: 'FL04',
@@ -92,11 +95,12 @@ const MAP_STATIONS: MapStation[] = [
     yPct: 45,
     waterLevel: 2.15,
     dangerThreshold: 4.40,
-    rainIntensity: 4.2,
-    battery: 96,
-    solarV: 19.5,
-    status: 'SAFE',
-    description: 'Lembangan Sg. Ampang menghala ke kawasan Keramat dan Ampang Hilir.',
+    rainIntensity: 0.0,
+    battery: 20,
+    solarV: 0.0,
+    isOnline: false,
+    status: 'OFFLINE',
+    description: 'Lembangan Sg. Ampang menghala ke kawasan Keramat. (Status: Luar talian sejak 1 hari lalu).',
   },
 ];
 
@@ -105,7 +109,7 @@ interface MapViewProps {
 }
 
 export default function MapView({ onSelectStation }: MapViewProps) {
-  const [selectedStationId, setSelectedStationId] = useState<string>('FL01');
+  const [selectedStationId, setSelectedStationId] = useState<string>('FL02'); // Lalai ke FL02 (Online)
   const [layerRivers, setLayerRivers] = useState(true);
   const [layerHazard, setLayerHazard] = useState(true);
   const [layerRadar, setLayerRadar] = useState(false);
@@ -121,10 +125,10 @@ export default function MapView({ onSelectStation }: MapViewProps) {
         <div className="space-y-0.5 sm:space-y-1">
           <h3 className="text-white text-sm sm:text-base font-bold flex items-center gap-2">
             <MapIcon size={16} className="text-[#cc0000]" />
-            Pusat Kawalan GIS Lembangan Sungai
+            Pusat Kawalan GIS Lembangan Sungai (Lembah Klang)
           </h3>
           <p className="text-[11px] sm:text-xs text-slate-400">
-            Pemantauan spatial stesen telemetri & zon limpahan banjir Lembah Klang
+            Pemantauan spatial: <span className="text-emerald-400 font-bold">Stesen FL02 Online</span>, 3 stesen luar talian
           </p>
         </div>
 
@@ -243,7 +247,7 @@ export default function MapView({ onSelectStation }: MapViewProps) {
               />
               
               {/* Label Sungai */}
-              <text x="300" y="60" fill="#7dd3fc" fontSize="10" fontFamily="monospace" fontWeight="bold" opacity="0.6">SG. GOMBAK</text>
+              <text x="300" y="60" fill="#7dd3fc" fontSize="10" fontFamily="monospace" fontWeight="bold" opacity="0.6">SG. GOMBAK (FL02 ONLINE)</text>
               <text x="440" y="130" fill="#7dd3fc" fontSize="10" fontFamily="monospace" fontWeight="bold" opacity="0.6">SG. BUNUS</text>
               <text x="560" y="240" fill="#7dd3fc" fontSize="10" fontFamily="monospace" fontWeight="bold" opacity="0.6">SG. AMPANG</text>
               <text x="240" y="520" fill="#7dd3fc" fontSize="10" fontFamily="monospace" fontWeight="bold" opacity="0.6">SG. KLANG</text>
@@ -253,15 +257,13 @@ export default function MapView({ onSelectStation }: MapViewProps) {
           {/* Lapisan Zon Risiko Banjir (Hazard Layer) */}
           {layerHazard && (
             <div className="absolute inset-0 pointer-events-none">
-              <div className="absolute top-[32%] left-[47%] w-24 sm:w-28 h-24 sm:h-28 bg-red-600/15 rounded-full blur-xl border border-red-500/30 animate-pulse" />
-              <div className="absolute top-[20%] left-[38%] w-20 sm:w-24 h-20 sm:h-24 bg-amber-500/10 rounded-full blur-lg border border-amber-500/20" />
-              <div className="absolute top-[56%] left-[44%] w-28 sm:w-32 h-28 sm:h-32 bg-amber-500/10 rounded-full blur-xl border border-amber-500/20" />
+              <div className="absolute top-[20%] left-[38%] w-24 sm:w-28 h-24 sm:h-28 bg-emerald-500/15 rounded-full blur-xl border border-emerald-500/30 animate-pulse" />
             </div>
           )}
 
           {/* Lapisan Radar Hujan Doppler */}
           {layerRadar && (
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_50%_35%,rgba(16,185,129,0.15),rgba(245,158,11,0.12),rgba(239,68,68,0.18),transparent_70%)] animate-pulse" />
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_42%_24%,rgba(16,185,129,0.2),transparent_60%)] animate-pulse" />
           )}
 
           {/* Kompas */}
@@ -273,49 +275,53 @@ export default function MapView({ onSelectStation }: MapViewProps) {
           {/* Petunjuk Status Warna */}
           <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md border border-slate-800 px-2.5 py-1 rounded-xl text-[9px] sm:text-[10px] text-slate-400 font-mono flex items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-red-500"></span> Bahaya
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> 
+              <span className="text-emerald-400 font-bold">Online (FL02)</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-amber-400"></span> Waspada
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span> Normal
+              <span className="w-2 h-2 rounded-full bg-slate-600"></span> 
+              <span className="text-slate-400">Offline (3 Stesen)</span>
             </div>
           </div>
 
           {/* Pin Stesen Interaktif */}
           {MAP_STATIONS.map((station) => {
             const isSelected = selectedStationId === station.id;
-            const isCrit = station.status === 'CRITICAL';
-            const isWarn = station.status === 'WARNING';
-            const pinColor = isCrit ? 'bg-red-500' : isWarn ? 'bg-amber-400' : 'bg-emerald-400';
-            const pingRingColor = isCrit ? 'bg-red-500' : isWarn ? 'bg-amber-400' : 'bg-emerald-400';
+            const isOnline = station.isOnline;
 
             return (
               <div
                 key={station.id}
                 onClick={() => setSelectedStationId(station.id)}
                 style={{ top: `${station.yPct}%`, left: `${station.xPct}%` }}
-                className="absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20 p-2 -m-2 touch-manipulation"
+                className={`absolute -translate-x-1/2 -translate-y-1/2 cursor-pointer group z-20 p-2 -m-2 touch-manipulation ${
+                  !isOnline ? 'opacity-60 hover:opacity-100' : ''
+                }`}
               >
-                {/* Gelombang Radar Denyut */}
-                <div className={`absolute inset-0 rounded-full ${pingRingColor} opacity-40 animate-ping`} />
-                <div className={`absolute -inset-2 rounded-full ${pingRingColor} opacity-20`} />
+                {/* Gelombang Radar Denyut untuk stesen ONLINE sahaja */}
+                {isOnline && (
+                  <>
+                    <div className="absolute inset-0 rounded-full bg-emerald-500 opacity-50 animate-ping" />
+                    <div className="absolute -inset-2 rounded-full bg-emerald-500 opacity-25" />
+                  </>
+                )}
 
                 {/* Butang Pin Utama */}
                 <div
                   className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full border-2 border-black flex items-center justify-center shadow-lg transition-transform ${
                     isSelected ? 'scale-125 ring-2 ring-white ring-offset-2 ring-offset-black' : 'group-hover:scale-110'
-                  } ${pinColor}`}
+                  } ${isOnline ? 'bg-emerald-400' : 'bg-slate-700'}`}
                 >
-                  <MapPin size={12} className="text-black font-extrabold" />
+                  <MapPin size={12} className={isOnline ? "text-black font-extrabold" : "text-slate-400"} />
                 </div>
 
                 {/* Label Pin Apung */}
-                <div className={`absolute top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/90 text-white font-mono text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md border border-slate-800 shadow-md pointer-events-none transition-all ${
-                  isSelected ? 'border-sky-500 text-sky-300' : 'opacity-80 group-hover:opacity-100'
+                <div className={`absolute top-7 left-1/2 -translate-x-1/2 whitespace-nowrap bg-black/90 font-mono text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 sm:py-1 rounded-md border shadow-md pointer-events-none transition-all ${
+                  isOnline 
+                    ? 'border-emerald-500 text-emerald-300' 
+                    : 'border-slate-800 text-slate-400'
                 }`}>
-                  {station.id}: {station.waterLevel.toFixed(2)}m
+                  {station.id}: {isOnline ? `${station.waterLevel.toFixed(2)}m (ONLINE)` : 'OFFLINE'}
                 </div>
               </div>
             );
@@ -330,11 +336,9 @@ export default function MapView({ onSelectStation }: MapViewProps) {
               <div className="flex items-center gap-2">
                 <h3 className="text-white text-base sm:text-lg font-bold">{activeStation.name}</h3>
                 <span className={`text-[9px] sm:text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${
-                  activeStation.status === 'CRITICAL'
-                    ? 'bg-red-950/80 text-red-400 border-red-800/80 animate-pulse'
-                    : activeStation.status === 'WARNING'
-                    ? 'bg-amber-950/80 text-amber-400 border-amber-800/80'
-                    : 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80'
+                  activeStation.isOnline
+                    ? 'bg-emerald-950/80 text-emerald-400 border-emerald-800/80 animate-pulse'
+                    : 'bg-red-950/60 text-red-400 border-red-900/60'
                 }`}>
                   {activeStation.status}
                 </span>
@@ -354,27 +358,25 @@ export default function MapView({ onSelectStation }: MapViewProps) {
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             <div className="bg-[#141414] p-3 rounded-xl border border-slate-800">
               <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block mb-1 flex items-center gap-1">
-                <Droplets size={12} className="text-[#0ea5e9]" /> Paras Air
+                <Droplets size={12} className={activeStation.isOnline ? "text-[#0ea5e9]" : "text-slate-500"} /> Paras Air
               </span>
-              <span className={`text-xl sm:text-2xl font-black ${
-                activeStation.waterLevel >= activeStation.dangerThreshold ? 'text-red-400' : 'text-white'
-              }`}>
+              <span className={`text-xl sm:text-2xl font-black ${activeStation.isOnline ? 'text-white' : 'text-slate-500'}`}>
                 {activeStation.waterLevel.toFixed(2)}m
               </span>
               <span className="text-[9px] sm:text-[10px] text-slate-500 block mt-0.5 font-mono">
-                Ambang: {activeStation.dangerThreshold.toFixed(2)}m
+                {activeStation.isOnline ? `Ambang: ${activeStation.dangerThreshold.toFixed(2)}m` : 'Data Arkib'}
               </span>
             </div>
 
             <div className="bg-[#141414] p-3 rounded-xl border border-slate-800">
               <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block mb-1 flex items-center gap-1">
-                <CloudRain size={12} className="text-indigo-400" /> Hujan
+                <CloudRain size={12} className={activeStation.isOnline ? "text-indigo-400" : "text-slate-500"} /> Hujan
               </span>
-              <span className="text-xl sm:text-2xl font-black text-white">
+              <span className={`text-xl sm:text-2xl font-black ${activeStation.isOnline ? 'text-white' : 'text-slate-500'}`}>
                 {activeStation.rainIntensity.toFixed(1)} <span className="text-xs font-normal text-slate-400">mm/j</span>
               </span>
               <span className="text-[9px] sm:text-[10px] text-slate-500 block mt-0.5 font-mono">
-                RG-0.2mm
+                {activeStation.isOnline ? 'Aktif' : 'Terputus'}
               </span>
             </div>
           </div>
@@ -391,30 +393,44 @@ export default function MapView({ onSelectStation }: MapViewProps) {
               <span className="flex items-center gap-1">
                 <Sun size={12} className="text-amber-400" /> Solar:
               </span>
-              <span className="text-white font-mono font-bold">{activeStation.solarV.toFixed(1)} V</span>
+              <span className={`font-mono font-bold ${activeStation.isOnline ? 'text-white' : 'text-slate-500'}`}>
+                {activeStation.solarV.toFixed(1)} V
+              </span>
             </div>
             <div className="flex justify-between items-center text-slate-400 border-t border-slate-800/80 pt-2">
               <span className="flex items-center gap-1">
                 <Battery size={12} className="text-emerald-400" /> Bateri:
               </span>
-              <span className="text-emerald-400 font-mono font-bold">{activeStation.battery}%</span>
+              <span className={`font-mono font-bold ${activeStation.isOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
+                {activeStation.battery}%
+              </span>
             </div>
           </div>
 
-          {/* Pratonton Kamera Pintar */}
+          {/* Pratonton CCTV */}
           <div className="space-y-1.5">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
               <Camera size={13} className="text-sky-400" /> Pratonton CCTV ESP32-CAM
             </span>
             <div className="w-full h-28 sm:h-32 bg-black rounded-xl border border-slate-800 overflow-hidden relative flex items-center justify-center">
-              <img
-                src="https://images.unsplash.com/photo-1580256081112-e49377338b7f?q=80&w=600&auto=format&fit=crop"
-                alt="CCTV Snapshot"
-                className="w-full h-full object-cover opacity-70"
-              />
-              <div className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-mono px-2 py-0.5 rounded border border-slate-700">
-                LIVE SNAPSHOT ({activeStation.id})
-              </div>
+              {activeStation.isOnline ? (
+                <>
+                  <img
+                    src="https://images.unsplash.com/photo-1580256081112-e49377338b7f?q=80&w=600&auto=format&fit=crop"
+                    alt="CCTV Snapshot"
+                    className="w-full h-full object-cover opacity-70"
+                  />
+                  <div className="absolute top-2 left-2 bg-emerald-950/90 text-emerald-400 text-[9px] font-mono px-2 py-0.5 rounded border border-emerald-700 flex items-center gap-1">
+                    <span className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-ping"></span>
+                    ONLINE CCTV ({activeStation.id})
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center gap-1.5 text-slate-500 text-xs">
+                  <WifiOff size={20} className="text-red-500/70" />
+                  <span>CCTV Luar Talian ({activeStation.id})</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -424,7 +440,7 @@ export default function MapView({ onSelectStation }: MapViewProps) {
               onClick={() => onSelectStation(activeStation.id)}
               className="w-full bg-[#161616] hover:bg-slate-800 border border-slate-800 hover:border-slate-700 text-white font-bold py-2 sm:py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-sm"
             >
-              <span>Lihat Graf Real-Time {activeStation.id}</span>
+              <span>{activeStation.isOnline ? `Lihat Graf Live ${activeStation.id}` : `Lihat Log Arkib ${activeStation.id}`}</span>
               <ArrowRight size={13} className="text-[#0ea5e9]" />
             </button>
           )}

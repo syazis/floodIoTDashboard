@@ -21,7 +21,8 @@ import {
   Send,
   ShieldCheck,
   Menu,
-  X
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -48,10 +49,10 @@ import MapView from './components/MapView';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const STATIONS = [
-  { id: 'FL01', name: 'Station FL01 (Sg. Bunus)' },
-  { id: 'FL02', name: 'Station FL02 (Sg. Gombak)' },
-  { id: 'FL03', name: 'Station FL03 (Sg. Klang)' },
-  { id: 'FL04', name: 'Station FL04 (Sg. Ampang)' },
+  { id: 'FL02', name: 'Station FL02 (Sg. Gombak) - [ONLINE]', isOnline: true },
+  { id: 'FL01', name: 'Station FL01 (Sg. Bunus) - [OFFLINE]', isOnline: false },
+  { id: 'FL03', name: 'Station FL03 (Sg. Klang) - [OFFLINE]', isOnline: false },
+  { id: 'FL04', name: 'Station FL04 (Sg. Ampang) - [OFFLINE]', isOnline: false },
 ];
 
 interface HistoryItem {
@@ -67,7 +68,7 @@ export default function ProfessionalDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const [selectedStation, setSelectedStation] = useState('FL01'); 
+  const [selectedStation, setSelectedStation] = useState('FL02'); // Lalai ke FL02 (Satu-satunya stesen ONLINE) 
   const [isLiveVideo, setIsLiveVideo] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
@@ -734,9 +735,15 @@ export default function ProfessionalDashboard() {
                         <span className="text-4xl sm:text-5xl font-extrabold text-white tracking-tighter">
                           {currentData.water_level.toFixed(2)}m
                         </span>
-                        <div className="flex items-center text-[#0ea5e9] text-[10px] sm:text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2 py-0.5 sm:py-1 rounded-md border border-sky-900/50">
-                          <TrendingUp size={13} /> Telemetri Online
-                        </div>
+                        {selectedStation === 'FL02' ? (
+                          <div className="flex items-center text-emerald-400 text-[10px] sm:text-xs font-bold uppercase gap-1 bg-emerald-950/40 px-2 py-0.5 sm:py-1 rounded-md border border-emerald-900/50">
+                            <TrendingUp size={13} /> Telemetri Online
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-red-400 text-[10px] sm:text-xs font-bold uppercase gap-1 bg-red-950/40 px-2 py-0.5 sm:py-1 rounded-md border border-red-900/50">
+                            <AlertTriangle size={13} /> Node Offline
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -789,7 +796,7 @@ export default function ProfessionalDashboard() {
                       </div>
                       <p className="text-sm font-semibold text-white">Voltan Solar: <span className="text-[#0ea5e9]">{currentData.solar_v.toFixed(1)}V</span></p>
                       <p className="text-[10px] text-emerald-400 mt-1 uppercase font-extrabold italic">
-                        Status: {currentData.solar_v > 12.0 ? "Pengecasan Normal" : "Tiada Input / Malam"}
+                        Status: {selectedStation === 'FL02' ? (currentData.solar_v > 12.0 ? "Pengecasan Normal" : "Tiada Input / Malam") : "Luar Talian (Tiada Data)"}
                       </p>
                     </div>
 
@@ -805,7 +812,9 @@ export default function ProfessionalDashboard() {
                       </div>
                       <div className="flex justify-between mt-2.5 text-[10px] font-bold">
                         <span className="text-slate-500 uppercase">Node ID: {selectedStation}</span>
-                        <span className="text-emerald-400 uppercase italic">Online</span>
+                        <span className={selectedStation === 'FL02' ? "text-emerald-400 uppercase italic font-bold" : "text-red-400 uppercase italic font-bold"}>
+                          {selectedStation === 'FL02' ? "Online" : "Offline"}
+                        </span>
                       </div>
                     </div>
                   </div>
