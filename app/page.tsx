@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Image from 'next/image';
 import { 
@@ -11,15 +11,17 @@ import {
   Settings, 
   LogOut, 
   Search, 
-  Bell,
-  Sun,
-  Battery,
-  TrendingUp,
-  AlertTriangle,
-  ChevronDown,
-  Video,
-  VideoOff,
-  Send
+  Bell, 
+  Sun, 
+  Battery, 
+  TrendingUp, 
+  AlertTriangle, 
+  ChevronDown, 
+  Video, 
+  VideoOff, 
+  Send,
+  Sparkles,
+  ShieldCheck
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -33,6 +35,12 @@ import {
   Filler
 } from 'chart.js';
 import { Line } from 'react-chartjs-2';
+import { 
+  calculateWaterLevelPrediction, 
+  HistoricalDataPoint, 
+  RegressionModelType 
+} from '@/lib/predictiveRegression';
+import PredictiveAICard from './components/PredictiveAICard';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -43,11 +51,23 @@ const STATIONS = [
   { id: 'FL04', name: 'Station FL04 (Sg. Ampang)' },
 ];
 
+interface HistoryItem {
+  timestamp: number;
+  label: string;
+  waterLevel: number;
+}
+
 export default function ProfessionalDashboard() {
   const [selectedStation, setSelectedStation] = useState('FL01'); 
   const [isLiveVideo, setIsLiveVideo] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
+
+  // Tetapan Enjin Predictive AI
+  const [selectedModel, setSelectedModel] = useState<RegressionModelType>('linear');
+  const [dangerThreshold, setDangerThreshold] = useState<number>(4.40);
+  const [showForecastOnChart, setShowForecastOnChart] = useState<boolean>(true);
+  const [forecastHorizon, setForecastHorizon] = useState<number>(30); // 30 minit
 
   const [currentData, setCurrentData] = useState({
     water_level: 0.0,
@@ -59,48 +79,55 @@ export default function ProfessionalDashboard() {
     longitude: 101.6963
   });
 
-  const [chartHistory, setChartHistory] = useState<{ labels: string[]; values: number[] }>({
-    labels: ['Waiting...'],
-    values: [0]
-  });
+  const [historyPoints, setHistoryPoints] = useState<HistoryItem[]>([]);
 
   useEffect(() => {
     setCurrentData({ water_level: 0, battery: 0, solar_v: 0, max_24h: 0, current_depth: 0, latitude: 3.1604, longitude: 101.6963 });
-    setChartHistory({ labels: ['Loading...'], values: [0] });
+    setHistoryPoints([]);
     setIsLiveVideo(false); 
 
-    const fetchLatestData = async () => {
+    // Muat turun 30 rekod data sejarah lampau stesen bagi mengira keluk regresi
+    const fetchHistoricalData = async () => {
       const { data, error } = await supabase
         .from('flood_data')
         .select('*')
         .eq('station_id', selectedStation)
         .order('created_at', { ascending: false })
-        .limit(1);
+        .limit(30);
 
       if (data && data.length > 0) {
-        const latest = data[0];
+        // Susun semula dari paling awal ke paling terkini (kronologi)
+        const chronological = [...data].reverse();
+        const latest = chronological[chronological.length - 1];
+
         setCurrentData({
           water_level: latest.water_level || 0,
           battery: latest.battery_level || 0,
           solar_v: latest.solar_voltage || 0,
-          max_24h: latest.water_level || 0, 
+          max_24h: Math.max(...chronological.map(d => d.water_level || 0)),
           current_depth: latest.water_level || 0,
           latitude: latest.latitude || 3.1604,
           longitude: latest.longitude || 101.6963
         });
-        
-        const timestamp = new Date(latest.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setChartHistory({
-          labels: [timestamp],
-          values: [latest.water_level || 0]
+
+        const items: HistoryItem[] = chronological.map(item => {
+          const d = item.created_at ? new Date(item.created_at) : new Date();
+          return {
+            timestamp: d.getTime(),
+            label: d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+            waterLevel: item.water_level || 0,
+          };
         });
+
+        setHistoryPoints(items);
       } else {
-        setChartHistory({ labels: ['No Data'], values: [0] });
+        setHistoryPoints([]);
       }
     };
 
-    fetchLatestData();
+    fetchHistoricalData();
 
+    // Dengar kemas kini masa nyata dari ESP32 melalui Supabase Realtime
     const channel = supabase
       .channel(`esp32-flood-stream-${selectedStation}`)
       .on('postgres_changes', 
@@ -112,7 +139,8 @@ export default function ProfessionalDashboard() {
         }, 
         (payload) => {
           const incoming = payload.new;
-          const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const d = incoming.created_at ? new Date(incoming.created_at) : new Date();
+          const timestamp = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
           setCurrentData(prev => ({
             water_level: incoming.water_level,
@@ -124,19 +152,18 @@ export default function ProfessionalDashboard() {
             longitude: incoming.longitude || prev.longitude
           }));
 
-          setChartHistory(prev => {
-            const baseLabels = prev.labels.includes('Loading...') || prev.labels.includes('No Data') || prev.labels.includes('Waiting...') ? [] : prev.labels;
-            const baseValues = baseLabels.length === 0 ? [] : prev.values;
-
-            const newLabels = [...baseLabels, timestamp];
-            const newValues = [...baseValues, incoming.water_level];
-
-            if (newLabels.length > 10) {
-              newLabels.shift();
-              newValues.shift();
+          setHistoryPoints(prev => {
+            const newItem: HistoryItem = {
+              timestamp: d.getTime(),
+              label: timestamp,
+              waterLevel: incoming.water_level || 0,
+            };
+            const nextList = [...prev, newItem];
+            // Kekalkan 35 titik rekod lampau terkini untuk kestabilan graf & regresi
+            if (nextList.length > 35) {
+              nextList.shift();
             }
-
-            return { labels: newLabels, values: newValues };
+            return nextList;
           });
         }
       )
@@ -146,6 +173,21 @@ export default function ProfessionalDashboard() {
       supabase.removeChannel(channel);
     };
   }, [selectedStation]);
+
+  // Pengiraan Predictive AI berasaskan rekod lampau Supabase
+  const prediction = useMemo(() => {
+    const dataPoints: HistoricalDataPoint[] = historyPoints.map(p => ({
+      timestamp: p.timestamp,
+      waterLevel: p.waterLevel,
+    }));
+
+    return calculateWaterLevelPrediction(
+      dataPoints,
+      dangerThreshold,
+      selectedModel,
+      forecastHorizon
+    );
+  }, [historyPoints, dangerThreshold, selectedModel, forecastHorizon]);
 
   const handleToggleVideo = async () => {
     setVideoLoading(true);
@@ -184,22 +226,26 @@ export default function ProfessionalDashboard() {
   const handleTriggerTestAlert = async () => {
     setTestAlertLoading(true);
     
-    // 1. Sediakan format mesej laporan interaktif berasaskan data semasa di dashboard
-    const statusAir = currentData.water_level >= 4.40 ? "🚨 BAHAYA (CRITICAL)" : "✅ NORMAL";
+    // 1. Sediakan format mesej laporan interaktif berasaskan data semasa & ramalan AI di dashboard
+    const statusAir = currentData.water_level >= dangerThreshold ? "🚨 BAHAYA (CRITICAL)" : "✅ NORMAL";
+    const statusAI = prediction.minutesToDanger !== null 
+      ? `🚨 Dijangka cecah paras bahaya dalam ~${prediction.minutesToDanger} minit` 
+      : `✅ Paras stabil / Tiada ancaman bahaya (${prediction.trend})`;
     
     const teksMesej = 
-`🔔 *LAPORAN SEGERA STESEN THB*
+`🔔 *LAPORAN AMARAN BANJIR & PREDICTIVE AI THB*
 ---------------------------------------
 📍 *Stesen:* ${selectedStation}
-🌊 *Paras Air:* ${currentData.water_level.toFixed(2)} m (${statusAir})
-🔋 *Bateri:* ${currentData.battery}%
-☀️ *Solar:* ${currentData.solar_v.toFixed(1)} V
+🌊 *Paras Air Semasa:* ${currentData.water_level.toFixed(2)} m (${statusAir})
+📈 *Kadar Kenaikan:* ${prediction.rateOfChangeCmPerMin > 0 ? '+' : ''}${prediction.rateOfChangeCmPerMin} cm/min
+🤖 *Ramalan AI (ETA):* ${statusAI}
+📊 *Ketepatan Model ($R^2$):* ${prediction.rSquared}% (${selectedModel.toUpperCase()})
+🔋 *Bateri:* ${currentData.battery}% | ☀️ *Solar:* ${currentData.solar_v.toFixed(1)} V
 🌐 *Koordinat:* ${currentData.latitude.toFixed(4)}, ${currentData.longitude.toFixed(4)}
 ---------------------------------------
-⏱️ _Laporan diminta secara manual dari Live Dashboard oleh Pentadbir._`;
+⏱️ _Laporan dihantar daripada Live Dashboard dengan Enjin Predictive AI._`;
 
     try {
-      // 2. Gunakan API Bot Telegram yang sama seperti di dalam kod ESP32 anda
       const telegramToken = "8938370016:AAEzMuVy-08Vn9puh_e7ltRQykpJqUdoQtI";
       const chatId = "-5219407609";
       
@@ -213,14 +259,14 @@ export default function ProfessionalDashboard() {
         body: JSON.stringify({
           chat_id: chatId,
           text: teksMesej,
-          parse_mode: 'Markdown', // Membolehkan tulisan tebal/condong format markdown
+          parse_mode: 'Markdown',
         }),
       });
 
       const resData = await response.json();
 
       if (resData.ok) {
-        alert(`Berjaya! Laporan terkini Stesen ${selectedStation} telah dihantar ke grup Telegram.`);
+        alert(`Berjaya! Laporan terkini beserta unjuran AI Stesen ${selectedStation} telah dihantar ke grup Telegram.`);
       } else {
         alert(`Gagal menghantar ke Telegram: ${resData.description}`);
       }
@@ -232,25 +278,175 @@ export default function ProfessionalDashboard() {
     }
   };
 
-  const mainChartData = {
-    labels: chartHistory.labels,
-    datasets: [{
-      label: 'Water Depth (m)',
-      data: chartHistory.values,
-      borderColor: '#0ea5e9', 
-      backgroundColor: (context: any) => {
-        const ctx = context.chart.ctx;
-        const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(14, 165, 233, 0.25)'); 
-        gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
-        return gradient;
+  // Konfigurasi Data Graf Berbilang Lapisan: Data Sebenar + Unjuran Ramalan AI + Ambang Bahaya
+  const mainChartData = useMemo(() => {
+    if (historyPoints.length === 0) {
+      return {
+        labels: ['Memuatkan...'],
+        datasets: [
+          {
+            label: 'Water Depth (m)',
+            data: [0],
+            borderColor: '#0ea5e9',
+          }
+        ]
+      };
+    }
+
+    const histLabels = historyPoints.map(p => p.label);
+    const histValues = historyPoints.map(p => p.waterLevel);
+
+    const forecastPoints = (showForecastOnChart && prediction.forecastPoints.length > 0)
+      ? prediction.forecastPoints
+      : [];
+
+    const forecastLabels = forecastPoints.map(p => p.label);
+    const forecastValues = forecastPoints.map(p => p.predictedLevel);
+
+    const allLabels = [...histLabels, ...forecastLabels];
+
+    // Garis Sebenar: nilai untuk sejarah, null untuk masa depan
+    const actualData = [...histValues, ...Array(forecastLabels.length).fill(null)];
+
+    // Garis Ramalan: null untuk semua rekod lampau KECUALI rekod terkini (supaya garis bersambung lancar)
+    const lastHistVal = histValues[histValues.length - 1];
+    const predData = forecastPoints.length > 0
+      ? [...Array(Math.max(0, histValues.length - 1)).fill(null), lastHistVal, ...forecastValues]
+      : [];
+
+    // Garis rujukan ambang bahaya
+    const dangerData = Array(allLabels.length).fill(dangerThreshold);
+
+    const datasets: any[] = [
+      {
+        label: 'Paras Sebenar (m)',
+        data: actualData,
+        borderColor: '#0ea5e9',
+        backgroundColor: (context: any) => {
+          const ctx = context.chart?.ctx;
+          if (!ctx) return 'rgba(14, 165, 233, 0.1)';
+          const gradient = ctx.createLinearGradient(0, 0, 0, 320);
+          gradient.addColorStop(0, 'rgba(14, 165, 233, 0.25)');
+          gradient.addColorStop(1, 'rgba(14, 165, 233, 0)');
+          return gradient;
+        },
+        fill: true,
+        tension: 0.35,
+        pointRadius: 3.5,
+        pointHoverRadius: 6,
+        pointBackgroundColor: '#0ea5e9',
+        borderWidth: 2.5,
+      }
+    ];
+
+    if (showForecastOnChart && forecastPoints.length > 0) {
+      const isCrit = prediction.riskStatus === 'CRITICAL';
+      const isWarn = prediction.riskStatus === 'WARNING';
+      const forecastColor = isCrit ? '#ef4444' : isWarn ? '#f59e0b' : '#818cf8';
+
+      datasets.push({
+        label: `Unjuran AI (${selectedModel === 'polynomial' ? 'Kuadratik' : 'Linear'})`,
+        data: predData,
+        borderColor: forecastColor,
+        borderDash: [6, 4],
+        pointRadius: 4,
+        pointHoverRadius: 6,
+        pointBackgroundColor: forecastColor,
+        tension: selectedModel === 'polynomial' ? 0.35 : 0,
+        fill: false,
+        borderWidth: 2.5,
+      });
+    }
+
+    // Tambah garis aras bahaya horizontal
+    datasets.push({
+      label: `Paras Bahaya (${dangerThreshold.toFixed(2)}m)`,
+      data: dangerData,
+      borderColor: 'rgba(239, 68, 68, 0.85)',
+      borderDash: [4, 4],
+      pointRadius: 0,
+      borderWidth: 1.8,
+      fill: false,
+    });
+
+    return {
+      labels: allLabels,
+      datasets,
+    };
+  }, [historyPoints, showForecastOnChart, prediction, selectedModel, dangerThreshold]);
+
+  // Konfigurasi Carta Interaktif
+  const chartOptions = useMemo(() => {
+    const allKnownLevels = [
+      currentData.water_level,
+      dangerThreshold,
+      ...historyPoints.map(p => p.waterLevel),
+      ...prediction.forecastPoints.map(p => p.predictedLevel)
+    ];
+    const maxVal = Math.max(5.0, dangerThreshold + 0.6, ...allKnownLevels);
+
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index' as const,
+        intersect: false,
       },
-      fill: true,
-      tension: 0.4,
-      pointRadius: 4,
-      pointBackgroundColor: '#0ea5e9'
-    }]
-  };
+      plugins: {
+        legend: {
+          display: true,
+          position: 'top' as const,
+          align: 'end' as const,
+          labels: {
+            color: '#94a3b8',
+            font: { size: 11, weight: 'bold' as const },
+            boxWidth: 12,
+            usePointStyle: true,
+            padding: 14,
+          }
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.95)',
+          titleColor: '#f8fafc',
+          bodyColor: '#cbd5e1',
+          borderColor: '#334155',
+          borderWidth: 1,
+          padding: 10,
+          callbacks: {
+            label: (context: any) => {
+              if (context.raw === null || context.raw === undefined) return '';
+              return `${context.dataset.label}: ${Number(context.raw).toFixed(2)} m`;
+            }
+          }
+        }
+      },
+      scales: {
+        y: {
+          suggestedMin: 0,
+          suggestedMax: Math.ceil(maxVal * 10) / 10,
+          grid: {
+            color: '#1e293b',
+          },
+          ticks: {
+            color: '#ffffff',
+            font: { size: 11, weight: 'bold' as const },
+            callback: (value: any) => `${value}m`,
+          }
+        },
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            color: '#ffffff',
+            font: { size: 10, weight: 'bold' as const },
+            maxRotation: 45,
+            minRotation: 0,
+          }
+        }
+      }
+    };
+  }, [dangerThreshold, currentData.water_level, historyPoints, prediction]);
 
   return (
     <div className="flex h-screen bg-[#050505] text-slate-300 font-sans overflow-hidden">
@@ -266,6 +462,7 @@ export default function ProfessionalDashboard() {
         <nav className="flex-grow px-4 space-y-1 pt-6">
           <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active />
           <NavItem icon={<Radio size={20}/>} label="Sensors" />
+          <NavItem icon={<Sparkles size={20}/>} label="Predictive AI" active={false} badge="AI Active" />
           <NavItem icon={<FileText size={20}/>} label="Reports" />
           <NavItem icon={<MapIcon size={20}/>} label="Map View" />
           <NavItem icon={<Settings size={20}/>} label="Settings" />
@@ -300,7 +497,7 @@ export default function ProfessionalDashboard() {
                 <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Project Manager</p>
               </div>
               <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
-                  <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
+                <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
               </div>
             </div>
           </div>
@@ -358,7 +555,6 @@ export default function ProfessionalDashboard() {
             <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
               <div className="w-full h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
                 <img 
-                  //src="https://8eb1-2001-e68-63b2-3e00-d85-7d9a-d82b-7679.ngrok-free.app/stream" // 👈 SILA GANTIKAN DENGAN URL NGROK AKTIF ANDA SEMENTARA DEMO
                   src="http://172.20.10.2:81/stream"
                   alt="THB Flood Station Live Stream"
                   className="w-full h-full object-contain bg-black"
@@ -383,29 +579,61 @@ export default function ProfessionalDashboard() {
           <div className="grid grid-cols-12 gap-6">
             
             {/* Kad Graf Aras Air (Col-span-8) */}
-            <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
-              <div className="flex justify-between items-start mb-6">
+            <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
+              <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
                 <div>
-                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">Real-time Water Level</h3>
+                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                    Real-time Water Level & Predictive Projection
+                  </h3>
                   <div className="flex items-baseline gap-4 mt-2">
-                    <span className="text-5xl font-extrabold text-white tracking-tighter">{currentData.water_level.toFixed(2)}m</span>
-                    <div className="flex items-center text-[#0ea5e9] text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2 py-0.5 rounded border border-sky-900/50">
+                    <span className="text-5xl font-extrabold text-white tracking-tighter">
+                      {currentData.water_level.toFixed(2)}m
+                    </span>
+                    <div className="flex items-center text-[#0ea5e9] text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2.5 py-1 rounded-md border border-sky-900/50">
                       <TrendingUp size={14} /> Telemetry Link Online
                     </div>
                   </div>
                 </div>
+
+                {/* Status Ringkas Ramalan AI pada Graf */}
+                <div className="bg-[#141414] border border-slate-800/80 px-3 py-2 rounded-xl text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Status Ramalan AI</span>
+                  {prediction.isCurrentlyCritical ? (
+                    <span className="text-xs font-extrabold text-red-400 flex items-center gap-1 justify-end">
+                      🚨 Paras Bahaya!
+                    </span>
+                  ) : prediction.minutesToDanger !== null ? (
+                    <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1 justify-end">
+                      ⚠️ ~{prediction.minutesToDanger} minit ke {dangerThreshold.toFixed(2)}m
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 justify-end">
+                      <ShieldCheck size={13} /> Paras Air Terkawal
+                    </span>
+                  )}
+                </div>
               </div>
 
-              <div className="h-[280px] w-full">
+              <div className="h-[320px] w-full">
                 <Line data={mainChartData} options={chartOptions} />
               </div>
             </div>
 
             {/* Kad Lajur Informasi Sebelah Kanan (Col-span-4) */}
-            <div className="col-span-4 space-y-6">
+            <div className="col-span-12 lg:col-span-4 space-y-6">
               <div className="grid grid-cols-2 gap-4">
-                <GaugeCard label="Current Depth" value={`${currentData.current_depth.toFixed(2)}m`} subLabel={currentData.current_depth > 4.0 ? "Critical" : "Normal"} color={currentData.current_depth > 4.0 ? "text-red-500" : "text-emerald-400"} />
-                <GaugeCard label="Max 24h Depth" value={`${currentData.max_24h.toFixed(2)}m`} subLabel="Tracked" color="text-[#cc0000]" />
+                <GaugeCard 
+                  label="Current Depth" 
+                  value={`${currentData.current_depth.toFixed(2)}m`} 
+                  subLabel={currentData.current_depth >= dangerThreshold ? "Critical" : "Normal"} 
+                  color={currentData.current_depth >= dangerThreshold ? "text-red-500" : "text-emerald-400"} 
+                />
+                <GaugeCard 
+                  label="Max 24h Depth" 
+                  value={`${currentData.max_24h.toFixed(2)}m`} 
+                  subLabel="Tracked" 
+                  color="text-[#cc0000]" 
+                />
               </div>
               
               {/* Kad Status Kuasa Solar & Bateri */}
@@ -438,8 +666,24 @@ export default function ProfessionalDashboard() {
               </div>
             </div>
 
-            {/* Kad Kedudukan GIS Peta */}
-            <div className="col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
+            {/* 🌟 KAD UTAMA PREDICTIVE AI ENGINE (COL-SPAN-12) */}
+            <div className="col-span-12">
+              <PredictiveAICard
+                prediction={prediction}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                dangerThreshold={dangerThreshold}
+                onThresholdChange={setDangerThreshold}
+                showForecastOnChart={showForecastOnChart}
+                onToggleForecastOnChart={() => setShowForecastOnChart(!showForecastOnChart)}
+                forecastHorizon={forecastHorizon}
+                onForecastHorizonChange={setForecastHorizon}
+                historicalCount={historyPoints.length}
+              />
+            </div>
+
+            {/* Kad Kedudukan GIS Peta (Col-span-8) */}
+            <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
                 <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Sensor Locations</h3>
                 <div className="h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center">
                    <p className="text-slate-600 text-xs font-medium">Industrial Map Integration (Google Maps/Leaflet)</p>
@@ -451,15 +695,42 @@ export default function ProfessionalDashboard() {
                 </div>
             </div>
 
-            {/* Kad Log Amaran Bahaya Telegram */}
-            <div className="col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
+            {/* Kad Log Amaran Bahaya Telegram & AI (Col-span-4) */}
+            <div className="col-span-12 lg:col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
                <div className="flex justify-between items-center mb-6">
                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
                  <Settings size={14} className="text-slate-500 cursor-pointer hover:text-slate-300" />
                </div>
-               <div className="space-y-4">
-                 {currentData.water_level > 4.0 && (
-                   <AlertItem time="NOW" type="CRITICAL" stationId={selectedStation} text={`Exceeded 4.0m threshold at ${selectedStation}!`} color="text-red-400 bg-red-950/20 border-red-900/50" />
+               <div className="space-y-3">
+                 {/* Amaran AI Automatik jika risiko kritikal atau amaran dikesan */}
+                 {prediction.riskStatus === 'CRITICAL' && (
+                   <AlertItem 
+                     time="AI ETA" 
+                     type="PREDICTIVE ALERT" 
+                     stationId={selectedStation} 
+                     text={prediction.isCurrentlyCritical 
+                       ? `Paras bahaya (${dangerThreshold.toFixed(2)}m) sedang berlaku di ${selectedStation}!` 
+                       : `Air diramal mencecah paras bahaya (${dangerThreshold.toFixed(2)}m) dalam masa ~${prediction.minutesToDanger} minit!`}
+                     color="text-red-400 bg-red-950/40 border-red-900/80 animate-pulse" 
+                   />
+                 )}
+                 {prediction.riskStatus === 'WARNING' && prediction.minutesToDanger !== null && (
+                   <AlertItem 
+                     time="AI FORECAST" 
+                     type="EARLY WARNING" 
+                     stationId={selectedStation} 
+                     text={`Tren kenaikan ${prediction.rateOfChangeCmPerMin > 0 ? '+' : ''}${prediction.rateOfChangeCmPerMin} cm/min dikesan. Dijangka melepasi paras bahaya dalam ~${prediction.minutesToDanger} minit.`} 
+                     color="text-amber-400 bg-amber-950/40 border-amber-900/80" 
+                   />
+                 )}
+                 {currentData.water_level >= dangerThreshold && (
+                   <AlertItem 
+                     time="NOW" 
+                     type="CRITICAL" 
+                     stationId={selectedStation} 
+                     text={`Exceeded ${dangerThreshold.toFixed(2)}m danger threshold at ${selectedStation}!`} 
+                     color="text-red-400 bg-red-950/30 border-red-900/60" 
+                   />
                  )}
                  <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-amber-400 bg-amber-950/20 border-amber-900/50" />
                  <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-slate-400 bg-slate-900/40 border-slate-800" />
@@ -473,16 +744,23 @@ export default function ProfessionalDashboard() {
   );
 }
 
-// Sub-komponen tambahan dikekalkan
-function NavItem({ icon, label, active = false }: any) {
+// Sub-komponen pembantu
+function NavItem({ icon, label, active = false, badge }: any) {
   return (
-    <div className={`flex items-center gap-4 px-4 py-3 rounded-xl cursor-pointer transition-all ${
+    <div className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all ${
       active 
         ? 'bg-red-950/40 text-[#cc0000] font-bold border border-red-900/50 shadow-md' 
         : 'text-slate-400 hover:bg-[#161616] hover:text-white'
     }`}>
-      {icon}
-      <span className="text-sm font-semibold">{label}</span>
+      <div className="flex items-center gap-4">
+        {icon}
+        <span className="text-sm font-semibold">{label}</span>
+      </div>
+      {badge && (
+        <span className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800/80 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+          {badge}
+        </span>
+      )}
     </div>
   );
 }
@@ -506,7 +784,7 @@ function GaugeCard({ label, value, subLabel, color }: any) {
 function AlertItem({ time, type, stationId, text, color }: any) {
   return (
     <div className={`flex gap-4 p-3 rounded-xl border transition-all ${color}`}>
-      <span className="text-[10px] text-slate-500 font-mono font-bold mt-0.5">{time}</span>
+      <span className="text-[10px] text-slate-500 font-mono font-bold mt-0.5 whitespace-nowrap">{time}</span>
       <div>
         <p className="text-[10px] font-black uppercase mb-0.5">
           <span>{type}:</span> <span className="opacity-70">Station {stationId}</span>
@@ -516,30 +794,3 @@ function AlertItem({ time, type, stationId, text, color }: any) {
     </div>
   );
 }
-
-const chartOptions: any = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: { 
-    legend: { display: false } 
-  },
-  scales: {
-    y: { 
-      grid: { 
-        color: '#1e293b', 
-        drawBorder: false 
-      },
-      ticks: { 
-        color: '#ffffff', 
-        font: { size: 11, weight: 'bold' } 
-      }
-    },
-    x: { 
-      grid: { display: false },
-      ticks: { 
-        color: '#ffffff', 
-        font: { size: 10, weight: 'bold' } 
-      }
-    }
-  }
-};
