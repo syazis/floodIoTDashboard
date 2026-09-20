@@ -15,13 +15,13 @@ import {
   Sun, 
   Battery, 
   TrendingUp, 
-  AlertTriangle, 
   ChevronDown, 
   Video, 
   VideoOff, 
   Send,
-  Sparkles,
-  ShieldCheck
+  ShieldCheck,
+  Menu,
+  X
 } from 'lucide-react';
 import {
   Chart as ChartJS,
@@ -63,8 +63,9 @@ interface HistoryItem {
 type TabType = 'dashboard' | 'sensors' | 'reports' | 'map';
 
 export default function ProfessionalDashboard() {
-  // Tab Navigasi Aktif
+  // Tab Navigasi Aktif & Menu Mudah Alih (Mobile Drawer)
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [selectedStation, setSelectedStation] = useState('FL01'); 
   const [isLiveVideo, setIsLiveVideo] = useState(false);
@@ -407,10 +408,10 @@ export default function ProfessionalDashboard() {
           align: 'end' as const,
           labels: {
             color: '#94a3b8',
-            font: { size: 11, weight: 'bold' as const },
-            boxWidth: 12,
+            font: { size: 10, weight: 'bold' as const },
+            boxWidth: 10,
             usePointStyle: true,
-            padding: 14,
+            padding: 10,
           }
         },
         tooltip: {
@@ -419,7 +420,7 @@ export default function ProfessionalDashboard() {
           bodyColor: '#cbd5e1',
           borderColor: '#334155',
           borderWidth: 1,
-          padding: 10,
+          padding: 8,
           callbacks: {
             label: (context: any) => {
               if (context.raw === null || context.raw === undefined) return '';
@@ -427,15 +428,40 @@ export default function ProfessionalDashboard() {
             }
           }
         }
+      },
+      scales: {
+        y: {
+          suggestedMin: 0,
+          suggestedMax: Math.ceil(maxVal * 10) / 10,
+          grid: {
+            color: '#1e293b',
+          },
+          ticks: {
+            color: '#ffffff',
+            font: { size: 10, weight: 'bold' as const },
+            callback: (value: any) => `${value}m`,
+          }
+        },
+        x: {
+          grid: {
+            display: false,
+          },
+          ticks: {
+            color: '#ffffff',
+            font: { size: 9, weight: 'bold' as const },
+            maxRotation: 45,
+            minRotation: 0,
+          }
+        }
       }
     };
   }, [dangerThreshold, currentData.water_level, historyPoints, prediction]);
 
   return (
-    <div className="flex h-screen bg-[#050505] text-slate-300 font-sans overflow-hidden">
+    <div className="flex h-screen bg-[#050505] text-slate-300 font-sans overflow-hidden relative">
       
-      {/* 1. SIDEBAR */}
-      <aside className="w-64 bg-[#0f0f0f] border-r border-slate-800 flex flex-col shadow-lg select-none">
+      {/* 1. SIDEBAR DESKTOP (Hidden on Mobile) */}
+      <aside className="hidden lg:flex w-64 bg-[#0f0f0f] border-r border-slate-800 flex-col shadow-lg select-none flex-shrink-0">
         <div className="p-4 flex items-center justify-center border-b border-slate-800 bg-black">
           <div className="relative w-44 h-20">
             <Image src="/thb-logo.jpeg" alt="THB Logo" fill priority className="object-contain" />
@@ -482,20 +508,99 @@ export default function ProfessionalDashboard() {
         </div>
       </aside>
 
-      {/* 2. MAIN WORKSPACE */}
-      <main className="flex-grow flex flex-col overflow-hidden">
+      {/* 2. DRAWER MENU MUDAH ALIH (Mobile Slide-out Menu) */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden flex">
+          <div 
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity" 
+            onClick={() => setIsMobileMenuOpen(false)} 
+          />
+          <aside className="relative w-72 max-w-[85vw] bg-[#0f0f0f] border-r border-slate-800 flex flex-col p-4 shadow-2xl z-10">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 mb-4">
+              <div className="relative w-36 h-12">
+                <Image src="/thb-logo.jpeg" alt="THB Logo" fill priority className="object-contain" />
+              </div>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)} 
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800"
+                title="Tutup Menu"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            
+            <nav className="space-y-1.5 flex-grow">
+              <NavItem 
+                icon={<LayoutDashboard size={20}/>} 
+                label="Dashboard" 
+                active={activeTab === 'dashboard'} 
+                onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
+              />
+              <NavItem 
+                icon={<Radio size={20}/>} 
+                label="Sensors" 
+                active={activeTab === 'sensors'} 
+                onClick={() => { setActiveTab('sensors'); setIsMobileMenuOpen(false); }} 
+                badge="16 Active"
+              />
+              <NavItem 
+                icon={<FileText size={20}/>} 
+                label="Reports" 
+                active={activeTab === 'reports'} 
+                onClick={() => { setActiveTab('reports'); setIsMobileMenuOpen(false); }} 
+              />
+              <NavItem 
+                icon={<MapIcon size={20}/>} 
+                label="Map View" 
+                active={activeTab === 'map'} 
+                onClick={() => { setActiveTab('map'); setIsMobileMenuOpen(false); }} 
+                badge="GIS Live"
+              />
+              <NavItem 
+                icon={<Settings size={20}/>} 
+                label="Settings" 
+                active={false} 
+              />
+            </nav>
+
+            <div className="border-t border-slate-800 pt-3">
+              <NavItem icon={<LogOut size={20}/>} label="Log Out" />
+            </div>
+          </aside>
+        </div>
+      )}
+
+      {/* 3. MAIN WORKSPACE */}
+      <main className="flex-grow flex flex-col overflow-hidden min-w-0">
+        
         {/* Top Header Bar */}
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-[#0f0f0f] z-10">
-          <div className="flex items-center gap-4">
-            <div className="relative w-80">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-3 sm:px-6 md:px-8 bg-[#0f0f0f] z-10 flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-4">
+            {/* Hamburger Button untuk Mobile */}
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="lg:hidden p-2 -ml-1 text-slate-300 hover:text-white hover:bg-slate-800 rounded-xl transition-all"
+              title="Buka Menu"
+            >
+              <Menu size={20} />
+            </button>
+
+            {/* Logo ringkas di Header Mobile */}
+            <div className="lg:hidden relative w-24 h-8 flex-shrink-0">
+              <Image src="/thb-logo.jpeg" alt="THB Logo" fill priority className="object-contain" />
+            </div>
+
+            {/* Carian di Desktop */}
+            <div className="hidden sm:block relative w-48 md:w-72">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={15} />
               <input 
                 type="text" 
-                placeholder="Search station or alerts..." 
+                placeholder="Cari stesen..." 
                 className="w-full bg-[#161616] border border-slate-800 rounded-full py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:ring-1 focus:ring-[#cc0000] text-slate-200"
               />
             </div>
-            {/* Tajuk Navigasi Halaman Semasa */}
+
+            {/* Breadcrumb Navigasi */}
             <div className="hidden md:flex items-center gap-2 text-xs font-mono text-slate-500 border-l border-slate-800 pl-4">
               <span>PORTAL</span>
               <span>/</span>
@@ -503,25 +608,25 @@ export default function ProfessionalDashboard() {
             </div>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 sm:gap-6">
             <div className="relative">
-              <Bell size={20} className="text-slate-400 cursor-pointer hover:text-white" />
-              <span className="absolute -top-1 -right-1 w-4 h-4 bg-[#cc0000] rounded-full text-[10px] flex items-center justify-center text-white font-bold">3</span>
+              <Bell size={18} className="text-slate-400 cursor-pointer hover:text-white" />
+              <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-[#cc0000] rounded-full text-[9px] flex items-center justify-center text-white font-bold">3</span>
             </div>
-            <div className="flex items-center gap-3 border-l border-slate-800 pl-6">
-              <div className="text-right">
-                <p className="text-sm font-semibold text-white">Iskandar Z.</p>
-                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Project Manager</p>
+            <div className="flex items-center gap-2.5 sm:gap-3 border-l border-slate-800 pl-3 sm:pl-6">
+              <div className="text-right hidden sm:block">
+                <p className="text-xs sm:text-sm font-semibold text-white">Iskandar Z.</p>
+                <p className="text-[9px] sm:text-[10px] text-slate-500 uppercase font-bold tracking-wider">Project Manager</p>
               </div>
-              <div className="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 overflow-hidden">
+              <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-slate-800 border border-slate-700 overflow-hidden flex-shrink-0">
                 <img src="https://ui-avatars.com/api/?name=Iskandar+Z&background=cc0000&color=fff" alt="Profile" />
               </div>
             </div>
           </div>
         </header>
 
-        {/* Kontainer Utama Scrollable */}
-        <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-[#050505]">
+        {/* Kontainer Utama Scrollable (pb-24 untuk memberi ruang bottom nav pada mobile) */}
+        <div className="flex-grow p-3 sm:p-5 md:p-6 pb-24 lg:pb-6 overflow-y-auto space-y-4 sm:space-y-6 bg-[#050505]">
           
           {/* TAB 1: SENSORS VIEW */}
           {activeTab === 'sensors' && (
@@ -547,12 +652,12 @@ export default function ProfessionalDashboard() {
           {activeTab === 'dashboard' && (
             <>
               {/* PANEL UTAMA ATAS: PEMILIHAN STESEN DAN BUTANG PERINTAH */}
-              <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
-                <div className="relative inline-block">
+              <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-3.5 sm:p-4 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 shadow-sm">
+                <div className="relative inline-block w-full sm:w-auto">
                   <select 
                     value={selectedStation} 
                     onChange={(e) => setSelectedStation(e.target.value)}
-                    className="appearance-none bg-[#161616] text-white text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
+                    className="w-full sm:w-auto appearance-none bg-[#161616] text-white text-xs sm:text-sm font-semibold pl-3 sm:pl-4 pr-9 sm:pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
                   >
                     {STATIONS.map((station) => (
                       <option key={station.id} value={station.id}>
@@ -563,29 +668,29 @@ export default function ProfessionalDashboard() {
                   <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
                   {/* Butang Buka Live Stream */}
                   <button
                     onClick={handleToggleVideo}
                     disabled={videoLoading}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
+                    className={`flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
                       isLiveVideo 
                         ? 'bg-[#cc0000] border-red-700 text-white animate-pulse' 
                         : 'bg-[#161616] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
                     }`}
                   >
-                    {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
-                    {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
+                    {isLiveVideo ? <VideoOff size={13}/> : <Video size={13}/>}
+                    {videoLoading ? "Menyambung..." : isLiveVideo ? "Tutup Stream" : "Live Stream"}
                   </button>
 
                   {/* Butang Ujian Telegram */}
                   <button
                     onClick={handleTriggerTestAlert}
                     disabled={testAlertLoading}
-                    className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-sm"
                   >
-                    <Send size={14} />
-                    {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
+                    <Send size={13} />
+                    {testAlertLoading ? "Menghantar..." : "Test Telegram"}
                   </button>
                 </div>
               </div>
@@ -593,7 +698,7 @@ export default function ProfessionalDashboard() {
               {/* 🌟 RUANG VIDEO STRIM (COL-SPAN-12) */}
               {isLiveVideo && (
                 <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
-                  <div className="w-full h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
+                  <div className="w-full h-[260px] sm:h-[350px] md:h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
                     <img 
                       src="http://172.20.10.2:81/stream"
                       alt="THB Flood Station Live Stream"
@@ -603,65 +708,65 @@ export default function ProfessionalDashboard() {
                         console.error("Gagal menyambung ke live stream ESP32-CAM.");
                       }}
                     />
-                    <div className="absolute top-4 left-4 flex items-center gap-2 bg-[#cc0000] text-[10px] font-black uppercase text-white px-3 py-1.5 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
+                    <div className="absolute top-3 left-3 flex items-center gap-1.5 bg-[#cc0000] text-[9px] sm:text-[10px] font-black uppercase text-white px-2.5 py-1 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
                       <span className="w-1.5 h-1.5 bg-white rounded-full block animate-ping"></span>
-                      LIVE CCTV FEED ({selectedStation})
+                      LIVE CCTV ({selectedStation})
                     </div>
-                    <div className="absolute bottom-4 right-4 bg-black/80 text-[10px] text-emerald-400 px-3 py-1.5 rounded-xl backdrop-blur-sm font-mono border border-emerald-950 shadow-md flex items-center gap-1.5">
+                    <div className="absolute bottom-3 right-3 bg-black/80 text-[9px] sm:text-[10px] text-emerald-400 px-2.5 py-1 rounded-xl backdrop-blur-sm font-mono border border-emerald-950 shadow-md flex items-center gap-1">
                       <span className="w-1 h-1 bg-emerald-500 rounded-full block"></span>
-                      TUNNEL STATUS: PUBLIC HTTPS (NGROK) | TIMEOUT: 2 MIN
+                      STATUS: ONLINE | 2 MIN
                     </div>
                   </div>
                 </div>
               )}
 
               {/* GRID UTAMA BAWAH (GRAF & METRIK INFORMASI) */}
-              <div className="grid grid-cols-12 gap-6">
+              <div className="grid grid-cols-12 gap-4 sm:gap-6">
                 
                 {/* Kad Graf Aras Air (Col-span-8) */}
-                <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
-                  <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
+                <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 sm:p-6 shadow-md">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
                     <div>
-                      <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                      <h3 className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider">
                         Real-time Water Level & Predictive Projection
                       </h3>
-                      <div className="flex items-baseline gap-4 mt-2">
-                        <span className="text-5xl font-extrabold text-white tracking-tighter">
+                      <div className="flex items-baseline gap-3 mt-1.5 sm:mt-2">
+                        <span className="text-4xl sm:text-5xl font-extrabold text-white tracking-tighter">
                           {currentData.water_level.toFixed(2)}m
                         </span>
-                        <div className="flex items-center text-[#0ea5e9] text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2.5 py-1 rounded-md border border-sky-900/50">
-                          <TrendingUp size={14} /> Telemetry Link Online
+                        <div className="flex items-center text-[#0ea5e9] text-[10px] sm:text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2 py-0.5 sm:py-1 rounded-md border border-sky-900/50">
+                          <TrendingUp size={13} /> Telemetri Online
                         </div>
                       </div>
                     </div>
 
                     {/* Status Ringkas Ramalan AI pada Graf */}
-                    <div className="bg-[#141414] border border-slate-800/80 px-3 py-2 rounded-xl text-right">
-                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Status Ramalan AI</span>
+                    <div className="bg-[#141414] border border-slate-800/80 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl text-left sm:text-right w-full sm:w-auto">
+                      <span className="text-[9px] sm:text-[10px] uppercase font-bold text-slate-400 block">Status Ramalan AI</span>
                       {prediction.isCurrentlyCritical ? (
-                        <span className="text-xs font-extrabold text-red-400 flex items-center gap-1 justify-end">
+                        <span className="text-xs font-extrabold text-red-400 flex items-center gap-1 sm:justify-end">
                           🚨 Paras Bahaya!
                         </span>
                       ) : prediction.minutesToDanger !== null ? (
-                        <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1 justify-end">
-                          ⚠️ ~{prediction.minutesToDanger} minit ke {dangerThreshold.toFixed(2)}m
+                        <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1 sm:justify-end">
+                          ⚠️ ~{prediction.minutesToDanger}m ke {dangerThreshold.toFixed(2)}m
                         </span>
                       ) : (
-                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 justify-end">
-                          <ShieldCheck size={13} /> Paras Air Terkawal
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 sm:justify-end">
+                          <ShieldCheck size={12} /> Paras Terkawal
                         </span>
                       )}
                     </div>
                   </div>
 
-                  <div className="h-[320px] w-full">
+                  <div className="h-[250px] sm:h-[300px] md:h-[320px] w-full">
                     <Line data={mainChartData} options={chartOptions} />
                   </div>
                 </div>
 
                 {/* Kad Lajur Informasi Sebelah Kanan (Col-span-4) */}
-                <div className="col-span-12 lg:col-span-4 space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
+                <div className="col-span-12 lg:col-span-4 space-y-4 sm:space-y-6">
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     <GaugeCard 
                       label="Current Depth" 
                       value={`${currentData.current_depth.toFixed(2)}m`} 
@@ -677,28 +782,28 @@ export default function ProfessionalDashboard() {
                   </div>
                   
                   {/* Kad Status Kuasa Solar & Bateri */}
-                  <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-5 space-y-6 shadow-sm">
+                  <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 sm:p-5 space-y-4 sm:space-y-6 shadow-sm">
                     <div>
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
-                        <Sun size={14} className="text-amber-500" /> Solar Panel Health
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-1.5">
+                        <Sun size={13} className="text-amber-500" /> Kesihatan Solar
                       </div>
-                      <p className="text-sm font-semibold text-white">Solar Voltage: <span className="text-[#0ea5e9]">{currentData.solar_v.toFixed(1)}V</span></p>
+                      <p className="text-sm font-semibold text-white">Voltan Solar: <span className="text-[#0ea5e9]">{currentData.solar_v.toFixed(1)}V</span></p>
                       <p className="text-[10px] text-emerald-400 mt-1 uppercase font-extrabold italic">
-                        Status: {currentData.solar_v > 12.0 ? "Charging (Normal)" : "No Input / Night"}
+                        Status: {currentData.solar_v > 12.0 ? "Pengecasan Normal" : "Tiada Input / Malam"}
                       </p>
                     </div>
 
-                    <div className="pt-4 border-t border-slate-800">
-                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-3">
-                        <Battery size={14} className="text-[#0ea5e9]" /> Battery Health
+                    <div className="pt-3 sm:pt-4 border-t border-slate-800">
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2 sm:mb-3">
+                        <Battery size={13} className="text-[#0ea5e9]" /> Kesihatan Bateri
                       </div>
-                      <div className="flex justify-between text-sm mb-2 font-medium">
-                        <span className="text-slate-300">Battery: <span className="text-white font-bold">{currentData.battery}%</span></span>
+                      <div className="flex justify-between text-xs sm:text-sm mb-1.5 font-medium">
+                        <span className="text-slate-300">Bateri: <span className="text-white font-bold">{currentData.battery}%</span></span>
                       </div>
                       <div className="w-full bg-[#161616] h-2 rounded-full overflow-hidden border border-slate-800">
                         <div className="bg-[#0ea5e9] h-full transition-all duration-500" style={{ width: `${currentData.battery}%` }}></div>
                       </div>
-                      <div className="flex justify-between mt-3 text-[10px] font-bold">
+                      <div className="flex justify-between mt-2.5 text-[10px] font-bold">
                         <span className="text-slate-500 uppercase">Node ID: {selectedStation}</span>
                         <span className="text-emerald-400 uppercase italic">Online</span>
                       </div>
@@ -723,8 +828,8 @@ export default function ProfessionalDashboard() {
                 </div>
 
                 {/* Kad Kedudukan GIS Peta (Col-span-8) */}
-                <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
-                  <div className="flex justify-between items-center mb-4">
+                <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 sm:p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-3 sm:mb-4">
                     <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Sensor Locations</h3>
                     <button
                       onClick={() => setActiveTab('map')}
@@ -735,26 +840,26 @@ export default function ProfessionalDashboard() {
                   </div>
                   <div 
                     onClick={() => setActiveTab('map')}
-                    className="h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center cursor-pointer group"
+                    className="h-[180px] sm:h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center cursor-pointer group"
                   >
-                     <p className="text-slate-600 text-xs font-medium group-hover:text-slate-400 transition-colors">
-                       Klik untuk membuka Pusat Kawalan GIS Penuh (4 Stesen)
+                     <p className="text-slate-600 text-xs font-medium group-hover:text-slate-400 transition-colors text-center px-4">
+                       Sentuh untuk membuka Pusat Kawalan GIS Penuh (4 Stesen)
                      </p>
                      <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full animate-ping"></div>
                      <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-slate-900"></div>
-                     <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-400 bg-[#161616] px-3 py-1.5 rounded-xl border border-slate-800 shadow-sm">
-                       Lat: {currentData.latitude.toFixed(4)} | Lng: {currentData.longitude.toFixed(4)}
+                     <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-400 bg-[#161616] px-2.5 py-1 rounded-xl border border-slate-800 shadow-sm">
+                       {currentData.latitude.toFixed(4)}, {currentData.longitude.toFixed(4)}
                      </div>
                   </div>
                 </div>
 
                 {/* Kad Log Amaran Bahaya Telegram & AI (Col-span-4) */}
-                <div className="col-span-12 lg:col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
-                   <div className="flex justify-between items-center mb-6">
+                <div className="col-span-12 lg:col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 sm:p-6 shadow-sm">
+                   <div className="flex justify-between items-center mb-4 sm:mb-6">
                      <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
                      <Settings size={14} className="text-slate-500 cursor-pointer hover:text-slate-300" />
                    </div>
-                   <div className="space-y-3">
+                   <div className="space-y-2.5 sm:space-y-3">
                      {/* Amaran AI Automatik jika risiko kritikal atau amaran dikesan */}
                      {prediction.riskStatus === 'CRITICAL' && (
                        <AlertItem 
@@ -796,6 +901,47 @@ export default function ProfessionalDashboard() {
 
         </div>
       </main>
+
+      {/* 4. BAR NAVIGASI BAWAH MUDAH ALIH (Mobile Bottom Navigation Bar) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#0c0c0c]/95 backdrop-blur-lg border-t border-slate-800 flex items-center justify-around py-2 px-1 shadow-2xl safe-area-pb">
+        <button 
+          onClick={() => setActiveTab('dashboard')} 
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+            activeTab === 'dashboard' ? 'text-[#cc0000] font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <LayoutDashboard size={18} />
+          <span className="text-[10px]">Dashboard</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('sensors')} 
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+            activeTab === 'sensors' ? 'text-[#cc0000] font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Radio size={18} />
+          <span className="text-[10px]">Sensors</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('reports')} 
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+            activeTab === 'reports' ? 'text-[#cc0000] font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <FileText size={18} />
+          <span className="text-[10px]">Reports</span>
+        </button>
+        <button 
+          onClick={() => setActiveTab('map')} 
+          className={`flex flex-col items-center gap-1 py-1 px-3 rounded-xl transition-all ${
+            activeTab === 'map' ? 'text-[#cc0000] font-bold' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <MapIcon size={18} />
+          <span className="text-[10px]">Map</span>
+        </button>
+      </nav>
+
     </div>
   );
 }
@@ -805,17 +951,17 @@ function NavItem({ icon, label, active = false, badge, onClick }: any) {
   return (
     <div 
       onClick={onClick}
-      className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all ${
+      className={`flex items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 rounded-xl cursor-pointer transition-all ${
       active 
         ? 'bg-red-950/40 text-[#cc0000] font-bold border border-red-900/50 shadow-md' 
         : 'text-slate-400 hover:bg-[#161616] hover:text-white'
     }`}>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 sm:gap-4">
         {icon}
-        <span className="text-sm font-semibold">{label}</span>
+        <span className="text-xs sm:text-sm font-semibold">{label}</span>
       </div>
       {badge && (
-        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+        <span className={`text-[8px] sm:text-[9px] px-1.5 sm:px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
           active 
             ? 'bg-red-900/50 text-red-200 border-red-700/60' 
             : 'bg-slate-800 text-slate-300 border-slate-700'
@@ -829,29 +975,29 @@ function NavItem({ icon, label, active = false, badge, onClick }: any) {
 
 function GaugeCard({ label, value, subLabel, color }: any) {
   return (
-    <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 text-center shadow-sm">
-      <div className="w-18 h-18 mx-auto relative mb-3">
+    <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-3 sm:p-4 text-center shadow-sm">
+      <div className="w-14 h-14 sm:w-18 sm:h-18 mx-auto relative mb-2 sm:mb-3">
          <svg className="w-full h-full" viewBox="0 0 36 36">
             <path className="stroke-slate-800" strokeWidth="3" fill="none" strokeDasharray="100, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
             <path className={`stroke-current ${color}`} strokeWidth="3" strokeLinecap="round" fill="none" strokeDasharray="75, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
          </svg>
-         <div className="absolute inset-0 flex items-center justify-center text-[9px] text-slate-500 uppercase font-black">{subLabel}</div>
+         <div className="absolute inset-0 flex items-center justify-center text-[8px] sm:text-[9px] text-slate-500 uppercase font-black">{subLabel}</div>
       </div>
-      <p className="text-[9px] text-slate-400 uppercase font-bold tracking-widest mb-1">{label}</p>
-      <p className="text-lg font-extrabold text-white">{value}</p>
+      <p className="text-[8px] sm:text-[9px] text-slate-400 uppercase font-bold tracking-widest mb-0.5 sm:mb-1">{label}</p>
+      <p className="text-base sm:text-lg font-extrabold text-white">{value}</p>
     </div>
   );
 }
 
 function AlertItem({ time, type, stationId, text, color }: any) {
   return (
-    <div className={`flex gap-4 p-3 rounded-xl border transition-all ${color}`}>
-      <span className="text-[10px] text-slate-500 font-mono font-bold mt-0.5 whitespace-nowrap">{time}</span>
+    <div className={`flex gap-3 sm:gap-4 p-2.5 sm:p-3 rounded-xl border transition-all ${color}`}>
+      <span className="text-[9px] sm:text-[10px] text-slate-500 font-mono font-bold mt-0.5 whitespace-nowrap">{time}</span>
       <div>
-        <p className="text-[10px] font-black uppercase mb-0.5">
+        <p className="text-[9px] sm:text-[10px] font-black uppercase mb-0.5">
           <span>{type}:</span> <span className="opacity-70">Station {stationId}</span>
         </p>
-        <p className="text-xs text-slate-300 leading-tight font-medium">{text}</p>
+        <p className="text-[11px] sm:text-xs text-slate-300 leading-tight font-medium">{text}</p>
       </div>
     </div>
   );
