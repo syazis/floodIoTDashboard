@@ -41,6 +41,9 @@ import {
   RegressionModelType 
 } from '@/lib/predictiveRegression';
 import PredictiveAICard from './components/PredictiveAICard';
+import SensorsView from './components/SensorsView';
+import ReportsView from './components/ReportsView';
+import MapView from './components/MapView';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
@@ -57,7 +60,12 @@ interface HistoryItem {
   waterLevel: number;
 }
 
+type TabType = 'dashboard' | 'sensors' | 'reports' | 'map';
+
 export default function ProfessionalDashboard() {
+  // Tab Navigasi Aktif
+  const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+
   const [selectedStation, setSelectedStation] = useState('FL01'); 
   const [isLiveVideo, setIsLiveVideo] = useState(false);
   const [videoLoading, setVideoLoading] = useState(false);
@@ -419,31 +427,6 @@ export default function ProfessionalDashboard() {
             }
           }
         }
-      },
-      scales: {
-        y: {
-          suggestedMin: 0,
-          suggestedMax: Math.ceil(maxVal * 10) / 10,
-          grid: {
-            color: '#1e293b',
-          },
-          ticks: {
-            color: '#ffffff',
-            font: { size: 11, weight: 'bold' as const },
-            callback: (value: any) => `${value}m`,
-          }
-        },
-        x: {
-          grid: {
-            display: false,
-          },
-          ticks: {
-            color: '#ffffff',
-            font: { size: 10, weight: 'bold' as const },
-            maxRotation: 45,
-            minRotation: 0,
-          }
-        }
       }
     };
   }, [dangerThreshold, currentData.water_level, historyPoints, prediction]);
@@ -452,7 +435,7 @@ export default function ProfessionalDashboard() {
     <div className="flex h-screen bg-[#050505] text-slate-300 font-sans overflow-hidden">
       
       {/* 1. SIDEBAR */}
-      <aside className="w-64 bg-[#0f0f0f] border-r border-slate-800 flex flex-col shadow-lg">
+      <aside className="w-64 bg-[#0f0f0f] border-r border-slate-800 flex flex-col shadow-lg select-none">
         <div className="p-4 flex items-center justify-center border-b border-slate-800 bg-black">
           <div className="relative w-44 h-20">
             <Image src="/thb-logo.jpeg" alt="THB Logo" fill priority className="object-contain" />
@@ -460,12 +443,37 @@ export default function ProfessionalDashboard() {
         </div>
         
         <nav className="flex-grow px-4 space-y-1 pt-6">
-          <NavItem icon={<LayoutDashboard size={20}/>} label="Dashboard" active />
-          <NavItem icon={<Radio size={20}/>} label="Sensors" />
-          <NavItem icon={<Sparkles size={20}/>} label="Predictive AI" active={false} badge="AI Active" />
-          <NavItem icon={<FileText size={20}/>} label="Reports" />
-          <NavItem icon={<MapIcon size={20}/>} label="Map View" />
-          <NavItem icon={<Settings size={20}/>} label="Settings" />
+          <NavItem 
+            icon={<LayoutDashboard size={20}/>} 
+            label="Dashboard" 
+            active={activeTab === 'dashboard'} 
+            onClick={() => setActiveTab('dashboard')} 
+          />
+          <NavItem 
+            icon={<Radio size={20}/>} 
+            label="Sensors" 
+            active={activeTab === 'sensors'} 
+            onClick={() => setActiveTab('sensors')} 
+            badge="16 Active"
+          />
+          <NavItem 
+            icon={<FileText size={20}/>} 
+            label="Reports" 
+            active={activeTab === 'reports'} 
+            onClick={() => setActiveTab('reports')} 
+          />
+          <NavItem 
+            icon={<MapIcon size={20}/>} 
+            label="Map View" 
+            active={activeTab === 'map'} 
+            onClick={() => setActiveTab('map')} 
+            badge="GIS Live"
+          />
+          <NavItem 
+            icon={<Settings size={20}/>} 
+            label="Settings" 
+            active={false} 
+          />
         </nav>
 
         <div className="p-4 border-t border-slate-800 space-y-1">
@@ -478,14 +486,23 @@ export default function ProfessionalDashboard() {
       <main className="flex-grow flex flex-col overflow-hidden">
         {/* Top Header Bar */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-[#0f0f0f] z-10">
-          <div className="relative w-96">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search station or alerts..." 
-              className="w-full bg-[#161616] border border-slate-800 rounded-full py-2 pl-10 pr-4 text-sm focus:outline-none focus:ring-1 focus:ring-[#cc0000] text-slate-200"
-            />
+          <div className="flex items-center gap-4">
+            <div className="relative w-80">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
+              <input 
+                type="text" 
+                placeholder="Search station or alerts..." 
+                className="w-full bg-[#161616] border border-slate-800 rounded-full py-1.5 pl-9 pr-4 text-xs focus:outline-none focus:ring-1 focus:ring-[#cc0000] text-slate-200"
+              />
+            </div>
+            {/* Tajuk Navigasi Halaman Semasa */}
+            <div className="hidden md:flex items-center gap-2 text-xs font-mono text-slate-500 border-l border-slate-800 pl-4">
+              <span>PORTAL</span>
+              <span>/</span>
+              <span className="text-white font-bold uppercase tracking-wider">{activeTab}</span>
+            </div>
           </div>
+
           <div className="flex items-center gap-6">
             <div className="relative">
               <Bell size={20} className="text-slate-400 cursor-pointer hover:text-white" />
@@ -506,238 +523,277 @@ export default function ProfessionalDashboard() {
         {/* Kontainer Utama Scrollable */}
         <div className="flex-grow p-6 overflow-y-auto space-y-6 bg-[#050505]">
           
-          {/* PANEL UTAMA ATAS: PEMILIHAN STESEN DAN BUTANG PERINTAH */}
-          <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
-            <div className="relative inline-block">
-              <select 
-                value={selectedStation} 
-                onChange={(e) => setSelectedStation(e.target.value)}
-                className="appearance-none bg-[#161616] text-white text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
-              >
-                {STATIONS.map((station) => (
-                  <option key={station.id} value={station.id}>
-                    {station.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-            </div>
-
-            <div className="flex items-center gap-3">
-              {/* Butang Buka Live Stream */}
-              <button
-                onClick={handleToggleVideo}
-                disabled={videoLoading}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
-                  isLiveVideo 
-                    ? 'bg-[#cc0000] border-red-700 text-white animate-pulse' 
-                    : 'bg-[#161616] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
-                }`}
-              >
-                {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
-                {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
-              </button>
-
-              {/* Butang Ujian Telegram */}
-              <button
-                onClick={handleTriggerTestAlert}
-                disabled={testAlertLoading}
-                className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
-              >
-                <Send size={14} />
-                {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
-              </button>
-            </div>
-          </div>
-
-          {/* 🌟 RUANG VIDEO STRIM (COL-SPAN-12) - MENGGUNAKAN NGROK HTTPS TUNNEL DENGAN HALAMAN /stream */}
-          {isLiveVideo && (
-            <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
-              <div className="w-full h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
-                <img 
-                  src="http://172.20.10.2:81/stream"
-                  alt="THB Flood Station Live Stream"
-                  className="w-full h-full object-contain bg-black"
-                  onError={(e) => {
-                    e.currentTarget.src = "https://images.unsplash.com/photo-1580256081112-e49377338b7f?q=80&w=600&auto=format&fit=crop"; 
-                    console.error("Gagal menyambung ke live stream ESP32-CAM.");
-                  }}
-                />
-                <div className="absolute top-4 left-4 flex items-center gap-2 bg-[#cc0000] text-[10px] font-black uppercase text-white px-3 py-1.5 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
-                  <span className="w-1.5 h-1.5 bg-white rounded-full block animate-ping"></span>
-                  LIVE CCTV FEED ({selectedStation})
-                </div>
-                <div className="absolute bottom-4 right-4 bg-black/80 text-[10px] text-emerald-400 px-3 py-1.5 rounded-xl backdrop-blur-sm font-mono border border-emerald-950 shadow-md flex items-center gap-1.5">
-                  <span className="w-1 h-1 bg-emerald-500 rounded-full block"></span>
-                  TUNNEL STATUS: PUBLIC HTTPS (NGROK) | TIMEOUT: 2 MIN
-                </div>
-              </div>
-            </div>
+          {/* TAB 1: SENSORS VIEW */}
+          {activeTab === 'sensors' && (
+            <SensorsView />
           )}
 
-          {/* GRID UTAMA BAWAH (GRAF & METRIK INFORMASI) */}
-          <div className="grid grid-cols-12 gap-6">
-            
-            {/* Kad Graf Aras Air (Col-span-8) */}
-            <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
-              <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
-                <div>
-                  <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">
-                    Real-time Water Level & Predictive Projection
-                  </h3>
-                  <div className="flex items-baseline gap-4 mt-2">
-                    <span className="text-5xl font-extrabold text-white tracking-tighter">
-                      {currentData.water_level.toFixed(2)}m
-                    </span>
-                    <div className="flex items-center text-[#0ea5e9] text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2.5 py-1 rounded-md border border-sky-900/50">
-                      <TrendingUp size={14} /> Telemetry Link Online
+          {/* TAB 2: REPORTS VIEW */}
+          {activeTab === 'reports' && (
+            <ReportsView />
+          )}
+
+          {/* TAB 3: MAP VIEW */}
+          {activeTab === 'map' && (
+            <MapView 
+              onSelectStation={(stationId) => {
+                setSelectedStation(stationId);
+                setActiveTab('dashboard');
+              }}
+            />
+          )}
+
+          {/* TAB 4: DASHBOARD UTAMA + PREDICTIVE AI */}
+          {activeTab === 'dashboard' && (
+            <>
+              {/* PANEL UTAMA ATAS: PEMILIHAN STESEN DAN BUTANG PERINTAH */}
+              <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">
+                <div className="relative inline-block">
+                  <select 
+                    value={selectedStation} 
+                    onChange={(e) => setSelectedStation(e.target.value)}
+                    className="appearance-none bg-[#161616] text-white text-sm font-semibold pl-4 pr-10 py-2 rounded-xl border border-slate-800 focus:outline-none focus:ring-1 focus:ring-[#cc0000] cursor-pointer"
+                  >
+                    {STATIONS.map((station) => (
+                      <option key={station.id} value={station.id}>
+                        {station.name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                </div>
+
+                <div className="flex items-center gap-3">
+                  {/* Butang Buka Live Stream */}
+                  <button
+                    onClick={handleToggleVideo}
+                    disabled={videoLoading}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm border ${
+                      isLiveVideo 
+                        ? 'bg-[#cc0000] border-red-700 text-white animate-pulse' 
+                        : 'bg-[#161616] border-slate-800 text-slate-300 hover:text-white hover:bg-slate-800'
+                    }`}
+                  >
+                    {isLiveVideo ? <VideoOff size={14}/> : <Video size={14}/>}
+                    {videoLoading ? "Connecting..." : isLiveVideo ? "Tutup Live Stream" : "Buka Live Stream"}
+                  </button>
+
+                  {/* Butang Ujian Telegram */}
+                  <button
+                    onClick={handleTriggerTestAlert}
+                    disabled={testAlertLoading}
+                    className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm"
+                  >
+                    <Send size={14} />
+                    {testAlertLoading ? "Triggering..." : "Test Telegram Alert"}
+                  </button>
+                </div>
+              </div>
+
+              {/* 🌟 RUANG VIDEO STRIM (COL-SPAN-12) */}
+              {isLiveVideo && (
+                <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
+                  <div className="w-full h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
+                    <img 
+                      src="http://172.20.10.2:81/stream"
+                      alt="THB Flood Station Live Stream"
+                      className="w-full h-full object-contain bg-black"
+                      onError={(e) => {
+                        e.currentTarget.src = "https://images.unsplash.com/photo-1580256081112-e49377338b7f?q=80&w=600&auto=format&fit=crop"; 
+                        console.error("Gagal menyambung ke live stream ESP32-CAM.");
+                      }}
+                    />
+                    <div className="absolute top-4 left-4 flex items-center gap-2 bg-[#cc0000] text-[10px] font-black uppercase text-white px-3 py-1.5 rounded animate-pulse tracking-widest border border-red-700 shadow-md">
+                      <span className="w-1.5 h-1.5 bg-white rounded-full block animate-ping"></span>
+                      LIVE CCTV FEED ({selectedStation})
+                    </div>
+                    <div className="absolute bottom-4 right-4 bg-black/80 text-[10px] text-emerald-400 px-3 py-1.5 rounded-xl backdrop-blur-sm font-mono border border-emerald-950 shadow-md flex items-center gap-1.5">
+                      <span className="w-1 h-1 bg-emerald-500 rounded-full block"></span>
+                      TUNNEL STATUS: PUBLIC HTTPS (NGROK) | TIMEOUT: 2 MIN
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* GRID UTAMA BAWAH (GRAF & METRIK INFORMASI) */}
+              <div className="grid grid-cols-12 gap-6">
+                
+                {/* Kad Graf Aras Air (Col-span-8) */}
+                <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-md">
+                  <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
+                    <div>
+                      <h3 className="text-slate-400 text-xs font-bold uppercase tracking-wider">
+                        Real-time Water Level & Predictive Projection
+                      </h3>
+                      <div className="flex items-baseline gap-4 mt-2">
+                        <span className="text-5xl font-extrabold text-white tracking-tighter">
+                          {currentData.water_level.toFixed(2)}m
+                        </span>
+                        <div className="flex items-center text-[#0ea5e9] text-xs font-bold uppercase gap-1 bg-sky-950/40 px-2.5 py-1 rounded-md border border-sky-900/50">
+                          <TrendingUp size={14} /> Telemetry Link Online
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Status Ringkas Ramalan AI pada Graf */}
+                    <div className="bg-[#141414] border border-slate-800/80 px-3 py-2 rounded-xl text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 block">Status Ramalan AI</span>
+                      {prediction.isCurrentlyCritical ? (
+                        <span className="text-xs font-extrabold text-red-400 flex items-center gap-1 justify-end">
+                          🚨 Paras Bahaya!
+                        </span>
+                      ) : prediction.minutesToDanger !== null ? (
+                        <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1 justify-end">
+                          ⚠️ ~{prediction.minutesToDanger} minit ke {dangerThreshold.toFixed(2)}m
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 justify-end">
+                          <ShieldCheck size={13} /> Paras Air Terkawal
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="h-[320px] w-full">
+                    <Line data={mainChartData} options={chartOptions} />
+                  </div>
+                </div>
+
+                {/* Kad Lajur Informasi Sebelah Kanan (Col-span-4) */}
+                <div className="col-span-12 lg:col-span-4 space-y-6">
+                  <div className="grid grid-cols-2 gap-4">
+                    <GaugeCard 
+                      label="Current Depth" 
+                      value={`${currentData.current_depth.toFixed(2)}m`} 
+                      subLabel={currentData.current_depth >= dangerThreshold ? "Critical" : "Normal"} 
+                      color={currentData.current_depth >= dangerThreshold ? "text-red-500" : "text-emerald-400"} 
+                    />
+                    <GaugeCard 
+                      label="Max 24h Depth" 
+                      value={`${currentData.max_24h.toFixed(2)}m`} 
+                      subLabel="Tracked" 
+                      color="text-[#cc0000]" 
+                    />
+                  </div>
+                  
+                  {/* Kad Status Kuasa Solar & Bateri */}
+                  <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-5 space-y-6 shadow-sm">
+                    <div>
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
+                        <Sun size={14} className="text-amber-500" /> Solar Panel Health
+                      </div>
+                      <p className="text-sm font-semibold text-white">Solar Voltage: <span className="text-[#0ea5e9]">{currentData.solar_v.toFixed(1)}V</span></p>
+                      <p className="text-[10px] text-emerald-400 mt-1 uppercase font-extrabold italic">
+                        Status: {currentData.solar_v > 12.0 ? "Charging (Normal)" : "No Input / Night"}
+                      </p>
+                    </div>
+
+                    <div className="pt-4 border-t border-slate-800">
+                      <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-3">
+                        <Battery size={14} className="text-[#0ea5e9]" /> Battery Health
+                      </div>
+                      <div className="flex justify-between text-sm mb-2 font-medium">
+                        <span className="text-slate-300">Battery: <span className="text-white font-bold">{currentData.battery}%</span></span>
+                      </div>
+                      <div className="w-full bg-[#161616] h-2 rounded-full overflow-hidden border border-slate-800">
+                        <div className="bg-[#0ea5e9] h-full transition-all duration-500" style={{ width: `${currentData.battery}%` }}></div>
+                      </div>
+                      <div className="flex justify-between mt-3 text-[10px] font-bold">
+                        <span className="text-slate-500 uppercase">Node ID: {selectedStation}</span>
+                        <span className="text-emerald-400 uppercase italic">Online</span>
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Status Ringkas Ramalan AI pada Graf */}
-                <div className="bg-[#141414] border border-slate-800/80 px-3 py-2 rounded-xl text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-400 block">Status Ramalan AI</span>
-                  {prediction.isCurrentlyCritical ? (
-                    <span className="text-xs font-extrabold text-red-400 flex items-center gap-1 justify-end">
-                      🚨 Paras Bahaya!
-                    </span>
-                  ) : prediction.minutesToDanger !== null ? (
-                    <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1 justify-end">
-                      ⚠️ ~{prediction.minutesToDanger} minit ke {dangerThreshold.toFixed(2)}m
-                    </span>
-                  ) : (
-                    <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 justify-end">
-                      <ShieldCheck size={13} /> Paras Air Terkawal
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              <div className="h-[320px] w-full">
-                <Line data={mainChartData} options={chartOptions} />
-              </div>
-            </div>
-
-            {/* Kad Lajur Informasi Sebelah Kanan (Col-span-4) */}
-            <div className="col-span-12 lg:col-span-4 space-y-6">
-              <div className="grid grid-cols-2 gap-4">
-                <GaugeCard 
-                  label="Current Depth" 
-                  value={`${currentData.current_depth.toFixed(2)}m`} 
-                  subLabel={currentData.current_depth >= dangerThreshold ? "Critical" : "Normal"} 
-                  color={currentData.current_depth >= dangerThreshold ? "text-red-500" : "text-emerald-400"} 
-                />
-                <GaugeCard 
-                  label="Max 24h Depth" 
-                  value={`${currentData.max_24h.toFixed(2)}m`} 
-                  subLabel="Tracked" 
-                  color="text-[#cc0000]" 
-                />
-              </div>
-              
-              {/* Kad Status Kuasa Solar & Bateri */}
-              <div className="bg-[#0f0f0f] rounded-2xl border border-slate-800 p-5 space-y-6 shadow-sm">
-                <div>
-                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-2">
-                    <Sun size={14} className="text-amber-500" /> Solar Panel Health
-                  </div>
-                  <p className="text-sm font-semibold text-white">Solar Voltage: <span className="text-[#0ea5e9]">{currentData.solar_v.toFixed(1)}V</span></p>
-                  <p className="text-[10px] text-emerald-400 mt-1 uppercase font-extrabold italic">
-                    Status: {currentData.solar_v > 12.0 ? "Charging (Normal)" : "No Input / Night"}
-                  </p>
+                {/* 🌟 KAD UTAMA PREDICTIVE AI ENGINE (COL-SPAN-12) */}
+                <div className="col-span-12">
+                  <PredictiveAICard
+                    prediction={prediction}
+                    selectedModel={selectedModel}
+                    onModelChange={setSelectedModel}
+                    dangerThreshold={dangerThreshold}
+                    onThresholdChange={setDangerThreshold}
+                    showForecastOnChart={showForecastOnChart}
+                    onToggleForecastOnChart={() => setShowForecastOnChart(!showForecastOnChart)}
+                    forecastHorizon={forecastHorizon}
+                    onForecastHorizonChange={setForecastHorizon}
+                    historicalCount={historyPoints.length}
+                  />
                 </div>
 
-                <div className="pt-4 border-t border-slate-800">
-                  <div className="flex items-center gap-2 text-slate-400 text-xs font-bold uppercase mb-3">
-                    <Battery size={14} className="text-[#0ea5e9]" /> Battery Health
+                {/* Kad Kedudukan GIS Peta (Col-span-8) */}
+                <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Sensor Locations</h3>
+                    <button
+                      onClick={() => setActiveTab('map')}
+                      className="text-[11px] font-bold text-[#0ea5e9] hover:underline flex items-center gap-1"
+                    >
+                      Buka Peta Penuh <MapIcon size={12} />
+                    </button>
                   </div>
-                  <div className="flex justify-between text-sm mb-2 font-medium">
-                    <span className="text-slate-300">Battery: <span className="text-white font-bold">{currentData.battery}%</span></span>
-                  </div>
-                  <div className="w-full bg-[#161616] h-2 rounded-full overflow-hidden border border-slate-800">
-                    <div className="bg-[#0ea5e9] h-full transition-all duration-500" style={{ width: `${currentData.battery}%` }}></div>
-                  </div>
-                  <div className="flex justify-between mt-3 text-[10px] font-bold">
-                    <span className="text-slate-500 uppercase">Node ID: {selectedStation}</span>
-                    <span className="text-emerald-400 uppercase italic">Online</span>
+                  <div 
+                    onClick={() => setActiveTab('map')}
+                    className="h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center cursor-pointer group"
+                  >
+                     <p className="text-slate-600 text-xs font-medium group-hover:text-slate-400 transition-colors">
+                       Klik untuk membuka Pusat Kawalan GIS Penuh (4 Stesen)
+                     </p>
+                     <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full animate-ping"></div>
+                     <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-slate-900"></div>
+                     <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-400 bg-[#161616] px-3 py-1.5 rounded-xl border border-slate-800 shadow-sm">
+                       Lat: {currentData.latitude.toFixed(4)} | Lng: {currentData.longitude.toFixed(4)}
+                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
 
-            {/* 🌟 KAD UTAMA PREDICTIVE AI ENGINE (COL-SPAN-12) */}
-            <div className="col-span-12">
-              <PredictiveAICard
-                prediction={prediction}
-                selectedModel={selectedModel}
-                onModelChange={setSelectedModel}
-                dangerThreshold={dangerThreshold}
-                onThresholdChange={setDangerThreshold}
-                showForecastOnChart={showForecastOnChart}
-                onToggleForecastOnChart={() => setShowForecastOnChart(!showForecastOnChart)}
-                forecastHorizon={forecastHorizon}
-                onForecastHorizonChange={setForecastHorizon}
-                historicalCount={historyPoints.length}
-              />
-            </div>
-
-            {/* Kad Kedudukan GIS Peta (Col-span-8) */}
-            <div className="col-span-12 lg:col-span-8 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
-                <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Sensor Locations</h3>
-                <div className="h-[200px] bg-black border border-slate-900 rounded-xl relative overflow-hidden flex items-center justify-center">
-                   <p className="text-slate-600 text-xs font-medium">Industrial Map Integration (Google Maps/Leaflet)</p>
-                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full animate-ping"></div>
-                   <div className="absolute top-1/4 left-1/3 w-3 h-3 bg-[#cc0000] rounded-full border-2 border-slate-900"></div>
-                   <div className="absolute top-3 right-3 text-[10px] font-bold text-slate-400 bg-[#161616] px-3 py-1.5 rounded-xl border border-slate-800 shadow-sm">
-                     Lat: {currentData.latitude.toFixed(4)} | Lng: {currentData.longitude.toFixed(4)}
+                {/* Kad Log Amaran Bahaya Telegram & AI (Col-span-4) */}
+                <div className="col-span-12 lg:col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
+                   <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
+                     <Settings size={14} className="text-slate-500 cursor-pointer hover:text-slate-300" />
+                   </div>
+                   <div className="space-y-3">
+                     {/* Amaran AI Automatik jika risiko kritikal atau amaran dikesan */}
+                     {prediction.riskStatus === 'CRITICAL' && (
+                       <AlertItem 
+                         time="AI ETA" 
+                         type="PREDICTIVE ALERT" 
+                         stationId={selectedStation} 
+                         text={prediction.isCurrentlyCritical 
+                           ? `Paras bahaya (${dangerThreshold.toFixed(2)}m) sedang berlaku di ${selectedStation}!` 
+                           : `Air diramal mencecah paras bahaya (${dangerThreshold.toFixed(2)}m) dalam masa ~${prediction.minutesToDanger} minit!`}
+                         color="text-red-400 bg-red-950/40 border-red-900/80 animate-pulse" 
+                       />
+                     )}
+                     {prediction.riskStatus === 'WARNING' && prediction.minutesToDanger !== null && (
+                       <AlertItem 
+                         time="AI FORECAST" 
+                         type="EARLY WARNING" 
+                         stationId={selectedStation} 
+                         text={`Tren kenaikan ${prediction.rateOfChangeCmPerMin > 0 ? '+' : ''}${prediction.rateOfChangeCmPerMin} cm/min dikesan. Dijangka melepasi paras bahaya dalam ~${prediction.minutesToDanger} minit.`} 
+                         color="text-amber-400 bg-amber-950/40 border-amber-900/80" 
+                       />
+                     )}
+                     {currentData.water_level >= dangerThreshold && (
+                       <AlertItem 
+                         time="NOW" 
+                         type="CRITICAL" 
+                         stationId={selectedStation} 
+                         text={`Exceeded ${dangerThreshold.toFixed(2)}m danger threshold at ${selectedStation}!`} 
+                         color="text-red-400 bg-red-950/30 border-red-900/60" 
+                       />
+                     )}
+                     <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-amber-400 bg-amber-950/20 border-amber-900/50" />
+                     <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-slate-400 bg-slate-900/40 border-slate-800" />
                    </div>
                 </div>
-            </div>
 
-            {/* Kad Log Amaran Bahaya Telegram & AI (Col-span-4) */}
-            <div className="col-span-12 lg:col-span-4 bg-[#0f0f0f] rounded-2xl border border-slate-800 p-6 shadow-sm">
-               <div className="flex justify-between items-center mb-6">
-                 <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">Warning Alerts Feed</h3>
-                 <Settings size={14} className="text-slate-500 cursor-pointer hover:text-slate-300" />
-               </div>
-               <div className="space-y-3">
-                 {/* Amaran AI Automatik jika risiko kritikal atau amaran dikesan */}
-                 {prediction.riskStatus === 'CRITICAL' && (
-                   <AlertItem 
-                     time="AI ETA" 
-                     type="PREDICTIVE ALERT" 
-                     stationId={selectedStation} 
-                     text={prediction.isCurrentlyCritical 
-                       ? `Paras bahaya (${dangerThreshold.toFixed(2)}m) sedang berlaku di ${selectedStation}!` 
-                       : `Air diramal mencecah paras bahaya (${dangerThreshold.toFixed(2)}m) dalam masa ~${prediction.minutesToDanger} minit!`}
-                     color="text-red-400 bg-red-950/40 border-red-900/80 animate-pulse" 
-                   />
-                 )}
-                 {prediction.riskStatus === 'WARNING' && prediction.minutesToDanger !== null && (
-                   <AlertItem 
-                     time="AI FORECAST" 
-                     type="EARLY WARNING" 
-                     stationId={selectedStation} 
-                     text={`Tren kenaikan ${prediction.rateOfChangeCmPerMin > 0 ? '+' : ''}${prediction.rateOfChangeCmPerMin} cm/min dikesan. Dijangka melepasi paras bahaya dalam ~${prediction.minutesToDanger} minit.`} 
-                     color="text-amber-400 bg-amber-950/40 border-amber-900/80" 
-                   />
-                 )}
-                 {currentData.water_level >= dangerThreshold && (
-                   <AlertItem 
-                     time="NOW" 
-                     type="CRITICAL" 
-                     stationId={selectedStation} 
-                     text={`Exceeded ${dangerThreshold.toFixed(2)}m danger threshold at ${selectedStation}!`} 
-                     color="text-red-400 bg-red-950/30 border-red-900/60" 
-                   />
-                 )}
-                 <AlertItem time="14:15" type="WARNING" stationId="FL03" text="Station FL03 - Rapid rise detected" color="text-amber-400 bg-amber-950/20 border-amber-900/50" />
-                 <AlertItem time="11:30" type="INFO" stationId="FL04" text="Solar Voltage Low: Station FL04" color="text-slate-400 bg-slate-900/40 border-slate-800" />
-               </div>
-            </div>
+              </div>
+            </>
+          )}
 
-          </div>
         </div>
       </main>
     </div>
@@ -745,9 +801,11 @@ export default function ProfessionalDashboard() {
 }
 
 // Sub-komponen pembantu
-function NavItem({ icon, label, active = false, badge }: any) {
+function NavItem({ icon, label, active = false, badge, onClick }: any) {
   return (
-    <div className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all ${
+    <div 
+      onClick={onClick}
+      className={`flex items-center justify-between px-4 py-3 rounded-xl cursor-pointer transition-all ${
       active 
         ? 'bg-red-950/40 text-[#cc0000] font-bold border border-red-900/50 shadow-md' 
         : 'text-slate-400 hover:bg-[#161616] hover:text-white'
@@ -757,7 +815,11 @@ function NavItem({ icon, label, active = false, badge }: any) {
         <span className="text-sm font-semibold">{label}</span>
       </div>
       {badge && (
-        <span className="text-[9px] bg-indigo-950 text-indigo-300 border border-indigo-800/80 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border ${
+          active 
+            ? 'bg-red-900/50 text-red-200 border-red-700/60' 
+            : 'bg-slate-800 text-slate-300 border-slate-700'
+        }`}>
           {badge}
         </span>
       )}
