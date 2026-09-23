@@ -14,7 +14,13 @@ import {
   Clock, 
   Gauge, 
   Eye,
-  EyeOff
+  EyeOff,
+  Send,
+  Bell,
+  Bot,
+  Zap,
+  ShieldAlert,
+  CheckCircle2
 } from 'lucide-react';
 import { PredictionResult, RegressionModelType } from '@/lib/predictiveRegression';
 
@@ -29,6 +35,14 @@ interface PredictiveAICardProps {
   forecastHorizon: number;
   onForecastHorizonChange: (minutes: number) => void;
   historicalCount: number;
+  // AI Telegram Early Warning Props
+  onTriggerTelegramAlert?: () => void;
+  isSendingAlert?: boolean;
+  isSentinelActive?: boolean;
+  onToggleSentinel?: () => void;
+  sentinelThresholdMinutes?: number;
+  onSentinelThresholdChange?: (minutes: number) => void;
+  lastAlertSentTime?: string | null;
 }
 
 export default function PredictiveAICard({
@@ -42,6 +56,13 @@ export default function PredictiveAICard({
   forecastHorizon,
   onForecastHorizonChange,
   historicalCount,
+  onTriggerTelegramAlert,
+  isSendingAlert = false,
+  isSentinelActive = true,
+  onToggleSentinel,
+  sentinelThresholdMinutes = 60,
+  onSentinelThresholdChange,
+  lastAlertSentTime = null,
 }: PredictiveAICardProps) {
   const {
     currentLevel,
@@ -388,6 +409,104 @@ export default function PredictiveAICard({
         </div>
       </div>
 
+      {/* 5. Enjin Amaran Awal Telegram (AI Early Warning Sentinel) */}
+      <div className="mt-4 pt-4 border-t border-slate-800/80 bg-gradient-to-b from-[#141414] to-[#101010] p-4 rounded-xl border border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400">
+              <Bot size={16} />
+            </div>
+            <div>
+              <h4 className="text-xs sm:text-sm font-bold text-white flex items-center gap-2">
+                Amaran Awal Telegram AI
+                {isSentinelActive ? (
+                  <span className="flex items-center gap-1 bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    Auto-Sentinel Aktif
+                  </span>
+                ) : (
+                  <span className="bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                    Manual Sahaja
+                  </span>
+                )}
+              </h4>
+              <p className="text-[11px] text-slate-400">
+                Pemberitahuan ramalan kebarangkalian banjir dan baki masa (ETA) ke Telegram.
+              </p>
+            </div>
+          </div>
+
+          {/* Toggle Switch Sentinel */}
+          {onToggleSentinel && (
+            <button
+              onClick={onToggleSentinel}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold border transition-all ${
+                isSentinelActive
+                  ? 'bg-emerald-950/50 border-emerald-700/80 text-emerald-300 hover:bg-emerald-900/50'
+                  : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              <Zap size={13} className={isSentinelActive ? "text-emerald-400" : "text-slate-400"} />
+              {isSentinelActive ? "Sentinel Hidup" : "Sentinel Mati"}
+            </button>
+          )}
+        </div>
+
+        {/* Tetapan Sensitiviti Ambang ETA */}
+        <div className="bg-[#0c0c0c] p-3 rounded-lg border border-slate-800/80 mb-3 space-y-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <span className="text-slate-400 font-semibold flex items-center gap-1.5">
+              <Clock size={13} className="text-amber-400" />
+              Pencetus Amaran Awal jika Banjir Diramal Dalam:
+            </span>
+            <div className="flex items-center gap-1.5">
+              {[30, 45, 60, 90].map((mins) => (
+                <button
+                  key={mins}
+                  onClick={() => onSentinelThresholdChange && onSentinelThresholdChange(mins)}
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all ${
+                    sentinelThresholdMinutes === mins
+                      ? 'bg-amber-500 text-black shadow-sm font-black'
+                      : 'bg-[#181818] text-slate-400 hover:text-white border border-slate-800'
+                  }`}
+                >
+                  &lt; {mins}m
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="text-[10px] text-slate-500 italic">
+            *Bot akan menghantar amaran sekiranya regresi AI menjangkakan air mencecah {dangerThreshold.toFixed(2)}m dalam tempoh &lt; {sentinelThresholdMinutes} minit.
+          </p>
+        </div>
+
+        {/* Butang Tindakan Segera & Status Terkini */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          <div className="text-[11px] text-slate-400 flex items-center gap-1.5">
+            <CheckCircle2 size={13} className="text-emerald-400" />
+            <span>
+              Status Amaran Terakhir: {lastAlertSentTime ? (
+                <strong className="text-slate-200">{lastAlertSentTime}</strong>
+              ) : (
+                <span className="text-slate-500">Belum pernah dihantar sesi ini</span>
+              )}
+            </span>
+          </div>
+
+          {onTriggerTelegramAlert && (
+            <button
+              onClick={onTriggerTelegramAlert}
+              disabled={isSendingAlert}
+              className="flex items-center justify-center gap-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 active:scale-95 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg shadow-sky-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send size={14} className={isSendingAlert ? "animate-pulse" : ""} />
+              {isSendingAlert ? "Menghantar ke Telegram..." : "Hantar Amaran Awal AI ke Telegram"}
+            </button>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 }
+

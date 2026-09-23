@@ -96,7 +96,7 @@ const DUMMY_SENSORS: SensorNode[] = [
       type: '4G LTE Cat-M1 (Online)',
       rssi: -65,
       packetLoss: 0.01,
-      ipAddress: '10.204.12.82',
+      ipAddress: '172.20.10.3',
     },
     camera: {
       model: 'OV2640 2MP',

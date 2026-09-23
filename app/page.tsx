@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import Image from 'next/image';
 import { 
@@ -18,12 +18,16 @@ import {
   ChevronDown, 
   Video, 
   VideoOff, 
-  Send,
-  ShieldCheck,
-  Menu,
-  X,
-  AlertTriangle
+  Send, 
+  ShieldCheck, 
+  Menu, 
+  X, 
+  AlertTriangle,
+  Bot,
+  Zap,
+  CheckCircle2
 } from 'lucide-react';
+import { sendTelegramFloodAlert } from '@/lib/telegramAlert';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -78,6 +82,14 @@ export default function ProfessionalDashboard() {
   const [dangerThreshold, setDangerThreshold] = useState<number>(4.40);
   const [showForecastOnChart, setShowForecastOnChart] = useState<boolean>(true);
   const [forecastHorizon, setForecastHorizon] = useState<number>(30); // 30 minit
+
+  // Tetapan Amaran Awal Telegram (AI Sentinel)
+  const [isSentinelActive, setIsSentinelActive] = useState<boolean>(true);
+  const [sentinelThresholdMinutes, setSentinelThresholdMinutes] = useState<number>(60);
+  const [lastAlertSentTime, setLastAlertSentTime] = useState<string | null>(null);
+  const [isSendingAiAlert, setIsSendingAiAlert] = useState<boolean>(false);
+  const [alertToast, setAlertToast] = useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+  const lastAlertTimestampRef = useRef<number>(0);
 
   const [currentData, setCurrentData] = useState({
     water_level: 0.0,
@@ -233,60 +245,79 @@ export default function ProfessionalDashboard() {
     setVideoLoading(false);
   };
 
-  const handleTriggerTestAlert = async () => {
+  const handleSendAiTelegramAlert = async (isAutomatic = false) => {
+    if (isSendingAiAlert) return;
+    setIsSendingAiAlert(true);
     setTestAlertLoading(true);
-    
-    // 1. Sediakan format mesej laporan interaktif berasaskan data semasa & ramalan AI di dashboard
-    const statusAir = currentData.water_level >= dangerThreshold ? "🚨 BAHAYA (CRITICAL)" : "✅ NORMAL";
-    const statusAI = prediction.minutesToDanger !== null 
-      ? `🚨 Dijangka cecah paras bahaya dalam ~${prediction.minutesToDanger} minit` 
-      : `✅ Paras stabil / Tiada ancaman bahaya (${prediction.trend})`;
-    
-    const teksMesej = 
-`🔔 *LAPORAN AMARAN BANJIR & PREDICTIVE AI THB*
----------------------------------------
-📍 *Stesen:* ${selectedStation}
-🌊 *Paras Air Semasa:* ${currentData.water_level.toFixed(2)} m (${statusAir})
-📈 *Kadar Kenaikan:* ${prediction.rateOfChangeCmPerMin > 0 ? '+' : ''}${prediction.rateOfChangeCmPerMin} cm/min
-🤖 *Ramalan AI (ETA):* ${statusAI}
-📊 *Ketepatan Model ($R^2$):* ${prediction.rSquared}% (${selectedModel.toUpperCase()})
-🔋 *Bateri:* ${currentData.battery}% | ☀️ *Solar:* ${currentData.solar_v.toFixed(1)} V
-🌐 *Koordinat:* ${currentData.latitude.toFixed(4)}, ${currentData.longitude.toFixed(4)}
----------------------------------------
-⏱️ _Laporan dihantar daripada Live Dashboard dengan Enjin Predictive AI._`;
+
+    const stObj = STATIONS.find(s => s.id === selectedStation);
+    const stName = stObj ? stObj.name.replace(' - [ONLINE]', '').replace(' - [OFFLINE]', '') : selectedStation;
 
     try {
-      const telegramToken = "8938370016:AAEzMuVy-08Vn9puh_e7ltRQykpJqUdoQtI";
-      const chatId = "-5219407609";
-      
-      const url = `https://api.telegram.org/bot${telegramToken}/sendMessage`;
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          chat_id: chatId,
-          text: teksMesej,
-          parse_mode: 'Markdown',
-        }),
+      const result = await sendTelegramFloodAlert({
+        stationId: selectedStation,
+        stationName: stName,
+        waterLevel: currentData.water_level,
+        dangerThreshold: dangerThreshold,
+        battery: currentData.battery,
+        solarVoltage: currentData.solar_v,
+        prediction: prediction,
+        isAutomatic,
       });
 
-      const resData = await response.json();
-
-      if (resData.ok) {
-        alert(`Berjaya! Laporan terkini beserta unjuran AI Stesen ${selectedStation} telah dihantar ke grup Telegram.`);
+      if (result.success) {
+        const timeStr = new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' });
+        setLastAlertSentTime(timeStr);
+        lastAlertTimestampRef.current = Date.now();
+        setAlertToast({
+          message: isAutomatic 
+            ? `🤖 Amaran Awal AI Automatik dihantar ke Telegram (Banjir diramal dalam ~${prediction.minutesToDanger || 0} minit)`
+            : `✅ Amaran Awal AI (${selectedStation}) berjaya dihantar ke grup Telegram!`,
+          type: 'success'
+        });
+        setTimeout(() => setAlertToast(null), 6000);
       } else {
-        alert(`Gagal menghantar ke Telegram: ${resData.description}`);
+        setAlertToast({
+          message: result.message,
+          type: 'error'
+        });
+        setTimeout(() => setAlertToast(null), 6000);
       }
-    } catch (error: any) {
-      console.error("Ralat Telegram API:", error);
-      alert("Ralat sambungan rangkaian semasa menghantar Telegram alert.");
+    } catch (err: any) {
+      console.error("Ralat menghantar amaran Telegram:", err);
+      setAlertToast({
+        message: "Ralat rangkaian semasa menghubungi bot Telegram.",
+        type: 'error'
+      });
+      setTimeout(() => setAlertToast(null), 6000);
     } finally {
+      setIsSendingAiAlert(false);
       setTestAlertLoading(false);
     }
   };
+
+  // Pemantau Automatik AI Sentinel: Semak setiap kali data/ramalan dikira
+  useEffect(() => {
+    if (!isSentinelActive) return;
+
+    // Syarat amaran awal banjir AI:
+    // - Air diramal mencecah bahaya dalam masa <= sentinelThresholdMinutes (cth 60 minit) dan tren menaik
+    // - ATAU paras air semasa telah melepasi paras bahaya
+    const isFloodLikely = 
+      (prediction.minutesToDanger !== null && 
+       prediction.minutesToDanger <= sentinelThresholdMinutes && 
+       prediction.trend === 'RISING') ||
+      prediction.isCurrentlyCritical;
+
+    if (isFloodLikely) {
+      const now = Date.now();
+      const cooldownMs = 15 * 60 * 1000; // Cooldown 15 minit bagi mengelakkan spam ke Telegram
+
+      if (now - lastAlertTimestampRef.current > cooldownMs) {
+        handleSendAiTelegramAlert(true);
+      }
+    }
+  }, [prediction, isSentinelActive, sentinelThresholdMinutes]);
 
   // Konfigurasi Data Graf Berbilang Lapisan: Data Sebenar + Unjuran Ramalan AI + Ambang Bahaya
   const mainChartData = useMemo(() => {
@@ -684,24 +715,68 @@ export default function ProfessionalDashboard() {
                     {videoLoading ? "Menyambung..." : isLiveVideo ? "Tutup Stream" : "Live Stream"}
                   </button>
 
-                  {/* Butang Ujian Telegram */}
+                  {/* Butang Amaran Awal Telegram AI */}
                   <button
-                    onClick={handleTriggerTestAlert}
-                    disabled={testAlertLoading}
-                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-500 hover:to-amber-600 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-sm"
+                    onClick={() => handleSendAiTelegramAlert(false)}
+                    disabled={isSendingAiAlert || testAlertLoading}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 text-white px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-sm"
                   >
                     <Send size={13} />
-                    {testAlertLoading ? "Menghantar..." : "Test Telegram"}
+                    {isSendingAiAlert ? "Menghantar..." : "Hantar Alert Telegram AI"}
                   </button>
                 </div>
               </div>
+
+              {/* 🚨 BANNER AMARAN AWAL BANJIR AI */}
+              {((prediction.minutesToDanger !== null && prediction.minutesToDanger <= sentinelThresholdMinutes) || prediction.isCurrentlyCritical) && (
+                <div className="w-full bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border border-red-500/60 p-3.5 sm:p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
+                  <div className="flex items-start sm:items-center gap-3">
+                    <div className="p-2 rounded-xl bg-red-600/30 text-red-400 border border-red-500/50 shrink-0">
+                      <AlertTriangle size={22} className="animate-bounce" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs sm:text-sm font-black uppercase text-red-200 tracking-wider">
+                          Amaran Awal AI: Kebarangkalian Banjir Dikesan!
+                        </span>
+                        <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
+                          {prediction.isCurrentlyCritical ? 'Kecemasan' : 'Risiko Tinggi'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-red-200/90 mt-0.5">
+                        {prediction.isCurrentlyCritical ? (
+                          <>Paras air di <strong>{selectedStation}</strong> telah melepasi ambang bahaya ({dangerThreshold.toFixed(2)}m)!</>
+                        ) : (
+                          <>
+                            Air diramal mencecah ambang bahaya ({dangerThreshold.toFixed(2)}m) dalam masa lebih kurang{' '}
+                            <strong className="text-white underline font-black">
+                              ~{prediction.minutesToDanger} MINIT LAGI
+                            </strong>{' '}
+                            (Kadar Kenaikan: +{prediction.rateOfChangeCmPerMin} cm/min).
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => handleSendAiTelegramAlert(false)}
+                      disabled={isSendingAiAlert}
+                      className="flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 active:scale-95 text-white px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-md"
+                    >
+                      <Send size={13} />
+                      {isSendingAiAlert ? "Menghantar..." : "Hantar Alert Telegram Segera"}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 🌟 RUANG VIDEO STRIM (COL-SPAN-12) */}
               {isLiveVideo && (
                 <div className="w-full bg-black rounded-2xl border border-slate-800 overflow-hidden relative shadow-2xl transition-all duration-500">
                   <div className="w-full h-[260px] sm:h-[350px] md:h-[450px] relative bg-slate-950 flex items-center justify-center overflow-hidden">
                     <img 
-                      src="http://172.20.10.2:81/stream"
+                      src="http://172.20.10.3:81/stream"
                       alt="THB Flood Station Live Stream"
                       className="w-full h-full object-contain bg-black"
                       onError={(e) => {
@@ -833,6 +908,13 @@ export default function ProfessionalDashboard() {
                     forecastHorizon={forecastHorizon}
                     onForecastHorizonChange={setForecastHorizon}
                     historicalCount={historyPoints.length}
+                    onTriggerTelegramAlert={() => handleSendAiTelegramAlert(false)}
+                    isSendingAlert={isSendingAiAlert}
+                    isSentinelActive={isSentinelActive}
+                    onToggleSentinel={() => setIsSentinelActive(!isSentinelActive)}
+                    sentinelThresholdMinutes={sentinelThresholdMinutes}
+                    onSentinelThresholdChange={setSentinelThresholdMinutes}
+                    lastAlertSentTime={lastAlertSentTime}
                   />
                 </div>
 
@@ -950,6 +1032,36 @@ export default function ProfessionalDashboard() {
           <span className="text-[10px]">Map</span>
         </button>
       </nav>
+
+      {/* Notifikasi Toast Amaran Telegram */}
+      {alertToast && (
+        <div className="fixed top-5 right-5 z-50 max-w-md animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className={`p-4 rounded-2xl shadow-2xl border flex items-start gap-3 backdrop-blur-md ${
+            alertToast.type === 'success'
+              ? 'bg-emerald-950/90 border-emerald-500/60 text-emerald-200'
+              : alertToast.type === 'warning'
+              ? 'bg-amber-950/90 border-amber-500/60 text-amber-200'
+              : 'bg-red-950/90 border-red-500/60 text-red-200'
+          }`}>
+            <div className="shrink-0 mt-0.5">
+              {alertToast.type === 'success' ? (
+                <CheckCircle2 size={18} className="text-emerald-400" />
+              ) : (
+                <AlertTriangle size={18} className="text-red-400" />
+              )}
+            </div>
+            <div className="flex-1 text-xs font-semibold leading-relaxed">
+              {alertToast.message}
+            </div>
+            <button
+              onClick={() => setAlertToast(null)}
+              className="text-slate-400 hover:text-white p-1"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
 
     </div>
   );
