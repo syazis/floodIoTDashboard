@@ -181,13 +181,13 @@ export default function PredictiveAICard({
           </div>
         </div>
 
-        {/* Pilihan Ambang Bahaya */}
+        {/* Pilihan Ambang Bahaya (Menyokong Banjir Jalan Raya & Sungai) */}
         <div className="flex items-center gap-2 flex-wrap w-full md:w-auto">
           <span className="text-slate-400 font-medium flex items-center gap-1.5">
             <AlertTriangle size={13} className="text-red-400" /> Ambang:
           </span>
           <div className="flex items-center gap-1 flex-wrap">
-            {[3.80, 4.00, 4.40].map((val) => (
+            {[0.15, 0.25, 0.35, 4.40].map((val) => (
               <button
                 key={val}
                 onClick={() => onThresholdChange(val)}
@@ -196,19 +196,20 @@ export default function PredictiveAICard({
                     ? 'bg-red-950/60 border-red-700 text-red-300 shadow-sm'
                     : 'bg-[#0a0a0a] border-slate-800 text-slate-400 hover:border-slate-700'
                 }`}
+                title={val < 1.0 ? `Ambang Jalan Raya: ${(val * 100).toFixed(0)}cm` : `Ambang Sungai: ${val.toFixed(2)}m`}
               >
-                {val.toFixed(2)}m
+                {val < 1.0 ? `${(val * 100).toFixed(0)}cm` : `${val.toFixed(2)}m`}
               </button>
             ))}
             <input
               type="number"
-              step="0.1"
-              min="1.0"
-              max="10.0"
+              step="0.01"
+              min="0.01"
+              max="15.0"
               value={dangerThreshold}
-              onChange={(e) => onThresholdChange(parseFloat(e.target.value) || 4.40)}
-              className="w-14 sm:w-16 bg-[#0a0a0a] border border-slate-800 text-white font-mono text-xs px-1.5 py-1 rounded-lg text-center focus:outline-none focus:border-indigo-500"
-              title="Kustom nilai paras bahaya (m)"
+              onChange={(e) => onThresholdChange(parseFloat(e.target.value) || 0.25)}
+              className="w-16 sm:w-20 bg-[#0a0a0a] border border-slate-800 text-white font-mono text-xs px-1.5 py-1 rounded-lg text-center focus:outline-none focus:border-indigo-500"
+              title="Kustom nilai paras bahaya dalam meter (cth: 0.25)"
             />
           </div>
         </div>

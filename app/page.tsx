@@ -25,7 +25,11 @@ import {
   AlertTriangle,
   Bot,
   Zap,
-  CheckCircle2
+  CheckCircle2,
+  Sliders,
+  Volume2,
+  VolumeX,
+  RefreshCw
 } from 'lucide-react';
 import { sendTelegramFloodAlert } from '@/lib/telegramAlert';
 import {
@@ -53,7 +57,7 @@ import MapView from './components/MapView';
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
 const STATIONS = [
-  { id: 'FL02', name: 'Station FL02 (Sg. Gombak) - [ONLINE]', isOnline: true },
+  { id: 'FL02', name: 'Station FL02 (Portable Roadside) - [ONLINE]', isOnline: true },
   { id: 'FL01', name: 'Station FL01 (Sg. Bunus) - [OFFLINE]', isOnline: false },
   { id: 'FL03', name: 'Station FL03 (Sg. Klang) - [OFFLINE]', isOnline: false },
   { id: 'FL04', name: 'Station FL04 (Sg. Ampang) - [OFFLINE]', isOnline: false },
@@ -77,9 +81,46 @@ export default function ProfessionalDashboard() {
   const [videoLoading, setVideoLoading] = useState(false);
   const [testAlertLoading, setTestAlertLoading] = useState(false);
 
+  // 🌟 Tetapan & Status Lapangan yang disegerakkan secara langsung dari ESP32 (V2.1 Cloud Sync)
+  const [espConfig, setEspConfig] = useState<{
+    baseline: number;
+    w_min: number;
+    d_max: number;
+    location: string;
+    alert: 'NORMAL' | 'WASPADA' | 'BAHAYA';
+    siren: 'OFF' | 'ON' | 'MUTED' | 'TEST_ON';
+    water_depth: number;
+    raw_dist: number;
+    battery: number;
+    solar_v: number;
+    last_sync: string | null;
+  }>({
+    baseline: 1.80,
+    w_min: 0.08,
+    d_max: 0.25,
+    location: 'Tepi Jalan Berisiko (Portable)',
+    alert: 'NORMAL',
+    siren: 'OFF',
+    water_depth: 0.0,
+    raw_dist: 1.80,
+    battery: 75,
+    solar_v: 12.4,
+    last_sync: null
+  });
+
+  // Modal Tetapan Dua Hala (Dashboard <-> ESP32)
+  const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+  const [isSavingConfig, setIsSavingConfig] = useState(false);
+  const [editConfigForm, setEditConfigForm] = useState({
+    baseline: 1.80,
+    w_min: 0.08,
+    d_max: 0.25,
+    location: 'Tepi Jalan Berisiko (Portable)'
+  });
+
   // Tetapan Enjin Predictive AI
   const [selectedModel, setSelectedModel] = useState<RegressionModelType>('linear');
-  const [dangerThreshold, setDangerThreshold] = useState<number>(4.40);
+  const [dangerThreshold, setDangerThreshold] = useState<number>(0.25); // Lalai diselaraskan dengan had jalan raya ESP32 (25 cm)
   const [showForecastOnChart, setShowForecastOnChart] = useState<boolean>(true);
   const [forecastHorizon, setForecastHorizon] = useState<number>(30); // 30 minit
 
@@ -149,8 +190,54 @@ export default function ProfessionalDashboard() {
 
     fetchHistoricalData();
 
-    // Dengar kemas kini masa nyata dari ESP32 melalui Supabase Realtime
-    const channel = supabase
+    // 🌟 1. Muat turun konfigurasi terkini ESP32 dari Supabase (V2.1 Cloud Sync)
+    const fetchStationConfig = async () => {
+      try {
+        const { data } = await supabase
+          .from('camera_commands')
+          .select('*')
+          .eq('station_id', `${selectedStation}_CONFIG`)
+          .single();
+
+        if (data && data.status) {
+          try {
+            const cfg = JSON.parse(data.status);
+            const loaded = {
+              baseline: cfg.baseline ?? 1.80,
+              w_min: cfg.w_min ?? 0.08,
+              d_max: cfg.d_max ?? 0.25,
+              location: cfg.location || 'Tepi Jalan Berisiko (Portable)',
+              alert: cfg.alert || 'NORMAL',
+              siren: cfg.siren || 'OFF',
+              water_depth: cfg.water_depth ?? 0.0,
+              raw_dist: cfg.raw_dist ?? 1.80,
+              battery: cfg.battery ?? 75,
+              solar_v: cfg.solar_v ?? 12.4,
+              last_sync: data.updated_at ? new Date(data.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : new Date().toLocaleTimeString()
+            };
+            setEspConfig(loaded);
+            setEditConfigForm({
+              baseline: loaded.baseline,
+              w_min: loaded.w_min,
+              d_max: loaded.d_max,
+              location: loaded.location
+            });
+            if (cfg.d_max) {
+              setDangerThreshold(cfg.d_max);
+            }
+          } catch (pe) {
+            console.error("Ralat parse config:", pe);
+          }
+        }
+      } catch (err) {
+        console.error("Ralat muat turun config stesen:", err);
+      }
+    };
+
+    fetchStationConfig();
+
+    // 🌟 2. Dengar kemas kini telemetri masa nyata dari ESP32 melalui Supabase Realtime
+    const telemetryChannel = supabase
       .channel(`esp32-flood-stream-${selectedStation}`)
       .on('postgres_changes', 
         { 
@@ -160,7 +247,7 @@ export default function ProfessionalDashboard() {
           filter: `station_id=eq.${selectedStation}`
         }, 
         (payload) => {
-          const incoming = payload.new;
+          const incoming = payload.new as any;
           const d = incoming.created_at ? new Date(incoming.created_at) : new Date();
           const timestamp = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
@@ -181,7 +268,6 @@ export default function ProfessionalDashboard() {
               waterLevel: incoming.water_level || 0,
             };
             const nextList = [...prev, newItem];
-            // Kekalkan 35 titik rekod lampau terkini untuk kestabilan graf & regresi
             if (nextList.length > 35) {
               nextList.shift();
             }
@@ -191,10 +277,99 @@ export default function ProfessionalDashboard() {
       )
       .subscribe();
 
+    // 🌟 3. Dengar kemas kini konfigurasi & amaran masa nyata dari ESP32
+    const configChannel = supabase
+      .channel(`esp32-config-stream-${selectedStation}`)
+      .on('postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'camera_commands',
+          filter: `station_id=eq.${selectedStation}_CONFIG`
+        },
+        (payload) => {
+          const incoming = payload.new as any;
+          if (incoming && incoming.status) {
+            try {
+              const cfg = JSON.parse(incoming.status);
+              const updated = {
+                baseline: cfg.baseline ?? 1.80,
+                w_min: cfg.w_min ?? 0.08,
+                d_max: cfg.d_max ?? 0.25,
+                location: cfg.location || 'Tepi Jalan Berisiko (Portable)',
+                alert: cfg.alert || 'NORMAL',
+                siren: cfg.siren || 'OFF',
+                water_depth: cfg.water_depth ?? 0.0,
+                raw_dist: cfg.raw_dist ?? 1.80,
+                battery: cfg.battery ?? 75,
+                solar_v: cfg.solar_v ?? 12.4,
+                last_sync: incoming.updated_at ? new Date(incoming.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : new Date().toLocaleTimeString()
+              };
+              setEspConfig(updated);
+              setEditConfigForm({
+                baseline: updated.baseline,
+                w_min: updated.w_min,
+                d_max: updated.d_max,
+                location: updated.location
+              });
+              if (cfg.d_max) {
+                setDangerThreshold(cfg.d_max);
+              }
+            } catch (pe) {
+              console.error("Ralat parse realtime config:", pe);
+            }
+          }
+        }
+      )
+      .subscribe();
+
     return () => {
-      supabase.removeChannel(channel);
+      supabase.removeChannel(telemetryChannel);
+      supabase.removeChannel(configChannel);
     };
   }, [selectedStation]);
+
+  // Fungsi simpan konfigurasi dua hala dari Dashboard ke ESP32
+  const handleSaveConfigFromDashboard = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingConfig(true);
+    try {
+      const updatedStatus = JSON.stringify({
+        ...espConfig,
+        baseline: editConfigForm.baseline,
+        w_min: editConfigForm.w_min,
+        d_max: editConfigForm.d_max,
+        location: editConfigForm.location,
+        updated_at: new Date().toISOString()
+      });
+
+      const { error } = await supabase
+        .from('camera_commands')
+        .upsert({
+          station_id: `${selectedStation}_CONFIG`,
+          status: updatedStatus
+        }, { onConflict: 'station_id' });
+
+      if (error) throw error;
+
+      setEspConfig(prev => ({
+        ...prev,
+        baseline: editConfigForm.baseline,
+        w_min: editConfigForm.w_min,
+        d_max: editConfigForm.d_max,
+        location: editConfigForm.location,
+        last_sync: new Date().toLocaleTimeString()
+      }));
+      setDangerThreshold(editConfigForm.d_max);
+      setIsConfigModalOpen(false);
+      setAlertToast({ message: "Tetapan berjaya disegerakkan ke ESP32!", type: "success" });
+    } catch (err: any) {
+      console.error("Gagal simpan konfigurasi:", err);
+      setAlertToast({ message: "Ralat menyimpan tetapan: " + err.message, type: "error" });
+    } finally {
+      setIsSavingConfig(false);
+    }
+  };
 
   // Pengiraan Predictive AI berasaskan rekod lampau Supabase
   const prediction = useMemo(() => {
@@ -693,7 +868,9 @@ export default function ProfessionalDashboard() {
                   >
                     {STATIONS.map((station) => (
                       <option key={station.id} value={station.id}>
-                        {station.name}
+                        {station.id === 'FL02' && espConfig.location 
+                          ? `Station FL02 (${espConfig.location}) - [ONLINE]` 
+                          : station.name}
                       </option>
                     ))}
                   </select>
@@ -715,6 +892,23 @@ export default function ProfessionalDashboard() {
                     {videoLoading ? "Menyambung..." : isLiveVideo ? "Tutup Stream" : "Live Stream"}
                   </button>
 
+                  {/* Butang Konfigurasi Dua Hala */}
+                  <button
+                    onClick={() => {
+                      setEditConfigForm({
+                        baseline: espConfig.baseline,
+                        w_min: espConfig.w_min,
+                        d_max: espConfig.d_max,
+                        location: espConfig.location
+                      });
+                      setIsConfigModalOpen(true);
+                    }}
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 sm:gap-2 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all shadow-sm"
+                  >
+                    <Sliders size={13} className="text-sky-400" />
+                    <span>Sync Tetapan</span>
+                  </button>
+
                   {/* Butang Amaran Awal Telegram AI */}
                   <button
                     onClick={() => handleSendAiTelegramAlert(false)}
@@ -727,34 +921,120 @@ export default function ProfessionalDashboard() {
                 </div>
               </div>
 
-              {/* 🚨 BANNER AMARAN AWAL BANJIR AI */}
-              {((prediction.minutesToDanger !== null && prediction.minutesToDanger <= sentinelThresholdMinutes) || prediction.isCurrentlyCritical) && (
-                <div className="w-full bg-gradient-to-r from-red-950/90 via-amber-950/90 to-red-950/90 border border-red-500/60 p-3.5 sm:p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-pulse">
+              {/* 🌟 BAR STATUS & PENYELARASAN MASA NYATA ESP32 (V2.1 CLOUD SYNC) */}
+              <div className="bg-[#0c0c0c] rounded-2xl border border-slate-800 p-3.5 sm:p-4 shadow-md">
+                <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-3 border-b border-slate-800/80 pb-3 mb-3">
+                  <div className="flex items-center gap-2.5 flex-wrap">
+                    <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-950/60 border border-sky-800/60 text-sky-400 text-xs font-bold">
+                      <span className="w-2 h-2 rounded-full bg-sky-400 animate-ping"></span>
+                      <span>PORTABLE V2.1 LIVE SYNC</span>
+                    </div>
+                    <span className="text-white font-bold text-xs sm:text-sm">
+                      📍 {espConfig.location}
+                    </span>
+                    <span className="text-[11px] font-mono text-slate-400">
+                      ({selectedStation})
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap text-xs">
+                    {/* Badge Status Amaran ESP32 */}
+                    <div className={`px-2.5 py-1 rounded-lg font-black uppercase text-[11px] flex items-center gap-1.5 border ${
+                      espConfig.alert === 'BAHAYA' 
+                        ? 'bg-red-950/80 border-red-700 text-red-200 animate-pulse'
+                        : espConfig.alert === 'WASPADA'
+                        ? 'bg-amber-950/80 border-amber-700 text-amber-200'
+                        : 'bg-emerald-950/80 border-emerald-700 text-emerald-200'
+                    }`}>
+                      <span className={`w-2 h-2 rounded-full ${
+                        espConfig.alert === 'BAHAYA' ? 'bg-red-500 animate-ping' : espConfig.alert === 'WASPADA' ? 'bg-amber-400' : 'bg-emerald-400'
+                      }`}></span>
+                      <span>STATUS ESP32: {espConfig.alert}</span>
+                    </div>
+
+                    {/* Badge Siren ESP32 */}
+                    <div className={`px-2.5 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1.5 border ${
+                      espConfig.siren === 'ON'
+                        ? 'bg-red-900/50 border-red-700 text-white animate-bounce'
+                        : espConfig.siren === 'MUTED'
+                        ? 'bg-amber-900/50 border-amber-700 text-amber-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}>
+                      {espConfig.siren === 'ON' ? <Volume2 size={13} className="text-red-400" /> : <VolumeX size={13} />}
+                      <span>SIREN: {espConfig.siren}</span>
+                    </div>
+
+                    <div className="text-[11px] text-slate-500 font-mono flex items-center gap-1 pl-1">
+                      <RefreshCw size={11} className="text-emerald-400 animate-spin-slow" />
+                      <span>Sync: {espConfig.last_sync || "Aktif"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Baris Metrik Konfigurasi Lapangan */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
+                  <div className="bg-[#141414] p-2.5 rounded-xl border border-slate-800/60">
+                    <span className="text-[10px] text-slate-400 font-bold uppercase block mb-0.5">Jarak Asas (Baseline)</span>
+                    <span className="text-white font-mono font-extrabold text-sm">
+                      {espConfig.baseline.toFixed(2)}m <span className="text-[11px] text-slate-500">({(espConfig.baseline * 100).toFixed(0)}cm)</span>
+                    </span>
+                  </div>
+
+                  <div className="bg-[#141414] p-2.5 rounded-xl border border-slate-800/60">
+                    <span className="text-[10px] text-amber-400/90 font-bold uppercase block mb-0.5">Had Waspada (Min)</span>
+                    <span className="text-amber-300 font-mono font-extrabold text-sm">
+                      {(espConfig.w_min * 100).toFixed(0)}cm <span className="text-[11px] text-slate-500">({espConfig.w_min.toFixed(2)}m)</span>
+                    </span>
+                  </div>
+
+                  <div className="bg-[#141414] p-2.5 rounded-xl border border-slate-800/60">
+                    <span className="text-[10px] text-red-400/90 font-bold uppercase block mb-0.5">Had Bahaya (Max)</span>
+                    <span className="text-red-300 font-mono font-extrabold text-sm">
+                      {(espConfig.d_max * 100).toFixed(0)}cm <span className="text-[11px] text-slate-500">({espConfig.d_max.toFixed(2)}m)</span>
+                    </span>
+                  </div>
+
+                  <div className="bg-[#141414] p-2.5 rounded-xl border border-slate-800/60">
+                    <span className="text-[10px] text-sky-400 font-bold uppercase block mb-0.5">Kedalaman Air Jalan</span>
+                    <span className="text-sky-300 font-mono font-extrabold text-sm">
+                      {(currentData.water_level * 100).toFixed(0)}cm <span className="text-[11px] text-slate-500">({currentData.water_level.toFixed(2)}m)</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 🚨 BANNER AMARAN AKTIF ESP32 / PREDICTIVE AI */}
+              {(espConfig.alert === 'BAHAYA' || espConfig.alert === 'WASPADA' || prediction.isCurrentlyCritical || (prediction.minutesToDanger !== null && prediction.minutesToDanger <= sentinelThresholdMinutes)) && (
+                <div className={`w-full p-3.5 sm:p-4 rounded-2xl shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 border ${
+                  (espConfig.alert === 'BAHAYA' || prediction.isCurrentlyCritical)
+                    ? 'bg-gradient-to-r from-red-950/95 via-red-900/90 to-red-950/95 border-red-500/80 animate-pulse'
+                    : 'bg-gradient-to-r from-amber-950/95 via-yellow-950/90 to-amber-950/95 border-amber-500/80'
+                }`}>
                   <div className="flex items-start sm:items-center gap-3">
-                    <div className="p-2 rounded-xl bg-red-600/30 text-red-400 border border-red-500/50 shrink-0">
+                    <div className={`p-2 rounded-xl shrink-0 border ${
+                      (espConfig.alert === 'BAHAYA' || prediction.isCurrentlyCritical)
+                        ? 'bg-red-600/30 text-red-400 border-red-500/50'
+                        : 'bg-amber-600/30 text-amber-400 border-amber-500/50'
+                    }`}>
                       <AlertTriangle size={22} className="animate-bounce" />
                     </div>
                     <div>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs sm:text-sm font-black uppercase text-red-200 tracking-wider">
-                          Amaran Awal AI: Kebarangkalian Banjir Dikesan!
+                        <span className="text-xs sm:text-sm font-black uppercase text-white tracking-wider">
+                          {espConfig.alert === 'BAHAYA' ? `🚨 AMARAN BAHAYA AKTIF DARI ESP32: BANJIR JALAN RAYA!` :
+                           espConfig.alert === 'WASPADA' ? `⚠️ AMARAN AWAL AKTIF DARI ESP32: AIR BERTAKUNG DI JALAN!` :
+                           `Amaran Awal AI: Kebarangkalian Banjir Dikesan!`}
                         </span>
-                        <span className="bg-red-600 text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase">
-                          {prediction.isCurrentlyCritical ? 'Kecemasan' : 'Risiko Tinggi'}
+                        <span className={`text-white text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                          (espConfig.alert === 'BAHAYA' || prediction.isCurrentlyCritical) ? 'bg-red-600' : 'bg-amber-600'
+                        }`}>
+                          {espConfig.alert === 'BAHAYA' ? 'Kecemasan Lapangan' : espConfig.alert === 'WASPADA' ? 'Waspada' : 'Risiko AI'}
                         </span>
                       </div>
-                      <p className="text-xs text-red-200/90 mt-0.5">
-                        {prediction.isCurrentlyCritical ? (
-                          <>Paras air di <strong>{selectedStation}</strong> telah melepasi ambang bahaya ({dangerThreshold.toFixed(2)}m)!</>
-                        ) : (
-                          <>
-                            Air diramal mencecah ambang bahaya ({dangerThreshold.toFixed(2)}m) dalam masa lebih kurang{' '}
-                            <strong className="text-white underline font-black">
-                              ~{prediction.minutesToDanger} MINIT LAGI
-                            </strong>{' '}
-                            (Kadar Kenaikan: +{prediction.rateOfChangeCmPerMin} cm/min).
-                          </>
-                        )}
+                      <p className="text-xs text-slate-200 mt-1">
+                        📍 Lokasi: <strong>{espConfig.location}</strong> | Kedalaman Air Semasa: <strong>{(currentData.water_level * 100).toFixed(1)} cm</strong> (Had Bahaya: {(dangerThreshold * 100).toFixed(0)} cm).
+                        {espConfig.siren === 'ON' && <span className="text-red-300 font-bold ml-2">📢 Siren Tapak Sedang Berbunyi!</span>}
+                        {espConfig.siren === 'MUTED' && <span className="text-amber-300 font-bold ml-2">🔕 Siren Disenyapkan (Snooze 10 Minit).</span>}
                       </p>
                     </div>
                   </div>
@@ -804,12 +1084,19 @@ export default function ProfessionalDashboard() {
                   <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
                     <div>
                       <h3 className="text-slate-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider">
-                        Real-time Water Level & Predictive Projection
+                        Real-time Road Water Depth & Predictive Projection
                       </h3>
-                      <div className="flex items-baseline gap-3 mt-1.5 sm:mt-2">
+                      <div className="flex items-baseline gap-2 sm:gap-3 mt-1.5 sm:mt-2 flex-wrap">
                         <span className="text-4xl sm:text-5xl font-extrabold text-white tracking-tighter">
-                          {currentData.water_level.toFixed(2)}m
+                          {currentData.water_level < 1.0 && currentData.water_level > 0 
+                            ? `${(currentData.water_level * 100).toFixed(0)}cm` 
+                            : `${currentData.water_level.toFixed(2)}m`}
                         </span>
+                        {currentData.water_level < 1.0 && currentData.water_level > 0 && (
+                          <span className="text-xs sm:text-sm text-slate-400 font-mono">
+                            ({currentData.water_level.toFixed(2)}m)
+                          </span>
+                        )}
                         {selectedStation === 'FL02' ? (
                           <div className="flex items-center text-emerald-400 text-[10px] sm:text-xs font-bold uppercase gap-1 bg-emerald-950/40 px-2 py-0.5 sm:py-1 rounded-md border border-emerald-900/50">
                             <TrendingUp size={13} /> Telemetri Online
@@ -831,7 +1118,7 @@ export default function ProfessionalDashboard() {
                         </span>
                       ) : prediction.minutesToDanger !== null ? (
                         <span className="text-xs font-extrabold text-amber-400 flex items-center gap-1 sm:justify-end">
-                          ⚠️ ~{prediction.minutesToDanger}m ke {dangerThreshold.toFixed(2)}m
+                          ⚠️ ~{prediction.minutesToDanger}m ke {dangerThreshold < 1.0 ? `${(dangerThreshold * 100).toFixed(0)}cm` : `${dangerThreshold.toFixed(2)}m`}
                         </span>
                       ) : (
                         <span className="text-xs font-bold text-emerald-400 flex items-center gap-1 sm:justify-end">
@@ -851,13 +1138,17 @@ export default function ProfessionalDashboard() {
                   <div className="grid grid-cols-2 gap-3 sm:gap-4">
                     <GaugeCard 
                       label="Current Depth" 
-                      value={`${currentData.current_depth.toFixed(2)}m`} 
+                      value={currentData.current_depth < 1.0 && currentData.current_depth > 0 
+                        ? `${(currentData.current_depth * 100).toFixed(0)}cm` 
+                        : `${currentData.current_depth.toFixed(2)}m`} 
                       subLabel={currentData.current_depth >= dangerThreshold ? "Critical" : "Normal"} 
                       color={currentData.current_depth >= dangerThreshold ? "text-red-500" : "text-emerald-400"} 
                     />
                     <GaugeCard 
                       label="Max 24h Depth" 
-                      value={`${currentData.max_24h.toFixed(2)}m`} 
+                      value={currentData.max_24h < 1.0 && currentData.max_24h > 0 
+                        ? `${(currentData.max_24h * 100).toFixed(0)}cm` 
+                        : `${currentData.max_24h.toFixed(2)}m`} 
                       subLabel="Tracked" 
                       color="text-[#cc0000]" 
                     />
@@ -1059,6 +1350,97 @@ export default function ProfessionalDashboard() {
             >
               <X size={14} />
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 MODAL KONFIGURASI DUA HALA (DASHBOARD <-> ESP32) */}
+      {isConfigModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-[#121212] border border-slate-800 rounded-2xl max-w-md w-full p-5 shadow-2xl relative">
+            <div className="flex justify-between items-center border-b border-slate-800 pb-3 mb-4">
+              <h3 className="text-white font-bold text-sm flex items-center gap-2">
+                <Sliders size={16} className="text-sky-400" />
+                Konfigurasi Stesen {selectedStation} (Dua Hala)
+              </h3>
+              <button 
+                onClick={() => setIsConfigModalOpen(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-lg"
+              >
+                <X size={16} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveConfigFromDashboard} className="space-y-3.5 text-xs">
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Nama Lokasi / Jalan Raya:</label>
+                <input 
+                  type="text" 
+                  value={editConfigForm.location}
+                  onChange={(e) => setEditConfigForm({ ...editConfigForm, location: e.target.value })}
+                  className="w-full bg-[#181818] border border-slate-800 rounded-xl p-2.5 text-white focus:outline-none focus:border-sky-500"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="text-slate-300 font-semibold block mb-1">Jarak Asas Permukaan Jalan (Baseline - meter):</label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  value={editConfigForm.baseline}
+                  onChange={(e) => setEditConfigForm({ ...editConfigForm, baseline: parseFloat(e.target.value) || 1.80 })}
+                  className="w-full bg-[#181818] border border-slate-800 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-sky-500"
+                  required
+                />
+                <span className="text-[11px] text-slate-500">Jarak dari sensor ke tanah kering sebelum banjir.</span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-amber-400 font-semibold block mb-1">Had Min Waspada (m):</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={editConfigForm.w_min}
+                    onChange={(e) => setEditConfigForm({ ...editConfigForm, w_min: parseFloat(e.target.value) || 0.08 })}
+                    className="w-full bg-[#181818] border border-slate-800 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-amber-500"
+                    required
+                  />
+                  <span className="text-[10px] text-slate-500">{((editConfigForm.w_min || 0) * 100).toFixed(0)} cm (Telegram sahaja)</span>
+                </div>
+
+                <div>
+                  <label className="text-red-400 font-semibold block mb-1">Had Max Bahaya (m):</label>
+                  <input 
+                    type="number" 
+                    step="0.01"
+                    value={editConfigForm.d_max}
+                    onChange={(e) => setEditConfigForm({ ...editConfigForm, d_max: parseFloat(e.target.value) || 0.25 })}
+                    className="w-full bg-[#181818] border border-slate-800 rounded-xl p-2.5 text-white font-mono focus:outline-none focus:border-red-500"
+                    required
+                  />
+                  <span className="text-[10px] text-slate-500">{((editConfigForm.d_max || 0) * 100).toFixed(0)} cm (Siren + Alert)</span>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-800 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsConfigModalOpen(false)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold hover:bg-slate-700"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingConfig}
+                  className="px-5 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white font-bold flex items-center gap-1.5 shadow-md"
+                >
+                  {isSavingConfig ? "Menyimpan..." : "💾 Simpan & Sync ke ESP32"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
